@@ -1,10 +1,10 @@
 #include <sstream>
 #include <signal.h>
 #include "Server.h"
-#include "LogWriter.h"
+#include "LogWriterOtl.h"
 
 
-extern LogWriter logWriter;
+extern LogWriterOtl logWriter;
 
 void CloseSocket(int socket)
 {
@@ -20,11 +20,12 @@ void CloseSocket(int socket)
 
 
 Server::Server() :
-    shutdownInProgress(false)
+    shutdownInProgress(false),
+    connectionPool(nullptr)
 {}
 
 
-bool Server::Initialize(unsigned int port, std::string& errDescription)
+bool Server::Initialize(unsigned int port,  ConnectionPool* cp, std::string& errDescription)
 {
     udpSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (udpSocket < 0) {
@@ -32,10 +33,12 @@ bool Server::Initialize(unsigned int port, std::string& errDescription)
         return false;
 	}
 #ifndef _WIN32
-    /*int optval = 1;
-    setsockopt(udpSocket, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<char*>(&optval), sizeof(optval));
-    optval = 1000;
-    setsockopt(udpSocket, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<char*>(&optval), sizeof(optval));*/
+    int optval = 1;
+    setsockopt(udpSocket, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
+    struct timeval tv;
+    tv.tv_sec = 0;
+    tv.tv_usec = 100000;
+    setsockopt(udpSocket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 #endif
 	struct sockaddr_in serverAddr;
 	memset((char *) &serverAddr, 0, sizeof(serverAddr));
@@ -46,7 +49,7 @@ bool Server::Initialize(unsigned int port, std::string& errDescription)
         errDescription = "Failed to call bind on server socket. Error #" + std::to_string(errno);
         return false;
 	}
-
+    connectionPool = cp;
     return true;
 }
 
@@ -74,67 +77,11 @@ void Server::Run()
 				mainThreadIndex, debug);
             ProcessIncomingData(receiveBuffer, recvBytes, senderAddr);
         }
-        else if (recvBytes == SOCKET_ERROR) {
+        else if (recvBytes == SOCKET_ERROR && errno != EAGAIN) {
             logWriter << "Error receiving data from socket (error code "
                     + std::to_string(errno) + "). ";
         }
     }
-
-
-//		struct timeval tv;
-//		tv.tv_sec = 0;
-//		tv.tv_usec = 100; //time-out = 100 ms
-//		fd_set readSet;
-//		FD_ZERO(&readSet);
-//		FD_SET(listenSocket, &readSet);
-//		int maxSocket = listenSocket;
-//		for (auto& s : clientSockets) {
-//			FD_SET(s, &readSet);
-//			if (s > maxSocket) {
-//				maxSocket = s;
-//			}
-//		}
-//		const int SELECT_TIMEOUT = 0;
-//		int socketCount;
-//		if ((socketCount = select(maxSocket + 1, &readSet, NULL, NULL, &tv)) != SELECT_TIMEOUT) {
-//			if (socketCount == SOCKET_ERROR) {
-//				logWriter << "socket select function returned error: " + std::to_string(WSAGetLastError());
-//                continue;
-//			}
-//			if (FD_ISSET(listenSocket, &readSet)) {
-//				ProcessIncomingConnection();
-//			}
-//            auto it = clientSockets.begin();
-//            while (it != clientSockets.end()) {
-//                if (FD_ISSET(*it, &readSet)) {
-//					char receiveBuffer[65000];
-//					int recvBytes = recv(*it, receiveBuffer, sizeof(receiveBuffer), 0);
-//                    if (recvBytes > 0) {
-//                        if (!ProcessIncomingData(*it, receiveBuffer, recvBytes)) {
-//                            logWriter << "Error receiving data on connection #" + std::to_string(*it) + " (error code "
-//                                + std::to_string(WSAGetLastError()) + "). Closing connection...";
-//                        }
-//                        it++;
-//                    }
-//                    else {
-//						if (recvBytes == 0) {
-//							logWriter << "Client " + GetClientIPAddr(*it) + " disconnected.";
-//						}
-//						else {
-//							logWriter << "Error receiving data from " + GetClientIPAddr(*it) + " (error code "
-//								+ std::to_string(WSAGetLastError()) + "). Closing connection...";
-//						}
-//						CloseSocket(*it);
-//                        clientAddrs.erase(*it);
-//                        clientSockets.erase(it++);
-//					}
-//				}
-//                else {
-//                    it++;
-//                }
-//			}
-//		}
-//	}
 }
 
 
@@ -186,28 +133,20 @@ int Server::ProcessNextRequestFromBuffer(const char* buffer, int maxLen, sockadd
 
     logWriter.Write("Request #" + std::to_string(requestNum) + " received from " + IPAddr2Text(senderAddr.sin_addr) 
 		+ ". Size: " + std::to_string(packetLen) + " bytes.", mainThreadIndex, notice);
-    ClientRequest clientRequest(senderAddr);
-    if (!clientRequest.ValidateAndSetRequestParams(requestNum, requestAttrs, errorDescr)) {
+    ClientRequest* clientRequest = new ClientRequest(senderAddr);
+    if (!clientRequest->ValidateAndSetRequestParams(requestNum, requestAttrs, errorDescr)) {
         logWriter.Write("Request #" + std::to_string(requestNum) + " rejected due to: " + errorDescr,
                         mainThreadIndex, error);
         SendNotAcceptedResponse(senderAddr, requestNum, errorDescr);
         return packetLen;
 	}
 	
-	unsigned int connIndex;
-//    if (!connectionPool->TryAcquire(connIndex)) {
-//		errorDescr = "Unable to acqure connection to HLR for request execution.";
-//        logWriter.Write("Request #" + std::to_string(requestNum) + " rejected due to: " + errorDescr,
-//                        mainThreadIndex, error);
-//		SendNotAcceptedResponse(socket, requestNum, errorDescr);
-//		return packetLen;
-//	}
-	logWriter.Write("Acquired connection #" + std::to_string(connIndex), mainThreadIndex, debug);
-    //clientRequest.resultCode = connectionPool->ExecRequest(connIndex, clientRequest);
-	logWriter << clientRequest.DumpResults();
-    if (!clientRequest.SendRequestResultToClient(udpSocket, errorDescr)) {
-		logWriter.Write("SendRequestResultToClient error: " + errorDescr, mainThreadIndex, error);
-	}
+    connectionPool->ExecRequest(clientRequest);
+    //
+    //logWriter << clientRequest.DumpResults();
+    //if (!clientRequest.SendRequestResultToClient(udpSocket, errorDescr)) {
+    //	logWriter.Write("SendRequestResultToClient error: " + errorDescr, mainThreadIndex, error);
+    //}
 	return packetLen;
 }
 

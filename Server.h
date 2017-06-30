@@ -5,13 +5,14 @@
 #include "pspacket.h"
 #include "Common.h"
 #include "ClientRequest.h"
+#include "ConnectionPool.h"
 
 
 class Server
 {
 public:
     Server();
-    bool Initialize(unsigned int port, std::string &errDescription);
+    bool Initialize(unsigned int port, ConnectionPool *cp, std::string &errDescription);
 	~Server();
 	void Run();
     void Stop();
@@ -22,7 +23,7 @@ private:
 
     int udpSocket;
     bool shutdownInProgress;
-
+    ConnectionPool* connectionPool;
     void ProcessIncomingData(const char* buffer, int bufferSize, sockaddr_in &senderAddr);
     int ProcessNextRequestFromBuffer(const char* buffer, int maxLen, sockaddr_in& senderAddr);
     bool SendNotAcceptedResponse(sockaddr_in &senderAddr, uint32_t requestNum, std::string errDescr);

@@ -4,7 +4,7 @@
 #include <iostream>
 #include <fstream>
 #include <algorithm>
-#include "LogWriter.h"
+#include "LogWriterOtl.h"
 
 struct Config
 {
@@ -28,6 +28,6 @@ private:
     const std::string logLevelParamName = "LOG_LEVEL";
 	const std::string serverPortParamName = "SERVER_PORT";
     const int minConnCount = 1;
-    const int maxConnCount = 16;
+    const int maxConnCount = MAX_THREADS;
     unsigned long ParseULongValue(const std::string& name, const std::string& value);
 };

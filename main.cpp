@@ -6,23 +6,14 @@
 #endif
 #include "Common.h"
 #include "Config.h"
-#include "LogWriter.h"
+#include "LogWriterOtl.h"
+#include "ConnectionPool.h"
 #include "Server.h"
 
 
-LogWriter logWriter;
+LogWriterOtl logWriter;
 Server server;
 
-//void CloseSocket(int socket)
-//{
-//#ifdef WIN32
-//	shutdown(socket, SD_BOTH);
-//	closesocket(socket);
-//#else
-//	shutdown(socket, SHUT_RDWR);
-//    close(socket);
-//#endif
-//}
 
 #ifndef _WIN32
 void SignalHandler(int signum, siginfo_t *info, void *ptr)
@@ -161,14 +152,14 @@ int main(int argc, char* argv[])
         logWriter << "SMS online validator start. Configuration settings:";
         logWriter << config.DumpAllSettings();
 
-//		ConnectionPool connectionPool(config);
+        ConnectionPool connectionPool;
         std::string errDescription;
-//		if (!connectionPool.Initialize(config, errDescription)) {
-//			std::cerr << "Unable to initialize connection pool: " << errDescription << ". Exiting." << std::endl;
-//			exit(EXIT_FAILURE);
-//		}
+        if (!connectionPool.Initialize(config, errDescription)) {
+            std::cerr << "Unable to initialize connection pool: " << errDescription << ". Exiting." << std::endl;
+            exit(EXIT_FAILURE);
+        }
 
-        if (!server.Initialize(config.serverPort, errDescription)) {
+        if (!server.Initialize(config.serverPort, &connectionPool, errDescription)) {
             std::cerr << "Unable to initialize server: " << errDescription << ". Exiting." << std::endl;
             exit(EXIT_FAILURE);
         }

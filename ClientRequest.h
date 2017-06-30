@@ -2,10 +2,10 @@
 #include <stdint.h>
 #include <string>
 #include <map>
-#include "LogWriter.h"
+#include "LogWriterOtl.h"
 #include "Common.h"
 
-extern LogWriter logWriter;
+extern LogWriterOtl logWriter;
 
 class ClientRequest
 {
