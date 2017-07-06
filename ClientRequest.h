@@ -2,10 +2,13 @@
 #include <stdint.h>
 #include <string>
 #include <map>
+#include <chrono>
 #include "LogWriterOtl.h"
 #include "Common.h"
 
 extern LogWriterOtl logWriter;
+
+using namespace std::chrono;
 
 class ClientRequest
 {
@@ -26,10 +29,14 @@ public:
     uint8_t totalParts;
     std::string servingMSC;
 
+    steady_clock::time_point accepted;
     int32_t resultCode;
     std::string resultDescr;
-private:
+
     static const int32_t resultCodeUnknown = -12;
+    static const int32_t resultCodeDbException = -999;
+private:
+
     sockaddr_in clientAddr;
 
     bool SetStringParam(const psAttrMap& requestAttrs, int paramType, std::string paramName, std::string& value, std::string& errorDescr);
@@ -60,7 +67,7 @@ private:
             errorDescr = "SetIntegerParam: unexpected integer size " + std::to_string(requiredSize);
             return false;
         }
-        logWriter.Write(paramName + ": " + std::to_string(value), mainThreadIndex, notice);
+        logWriter.Write(paramName + ": " + std::to_string(value), mainThreadIndex, debug);
         return true;
     }
 };

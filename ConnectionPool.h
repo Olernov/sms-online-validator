@@ -14,21 +14,22 @@ public:
     ConnectionPool();
     ~ConnectionPool();
     bool Initialize(const Config& config, std::string& errDescription);
-    bool TryAcquire(unsigned int& acquiredIndex);
-    void ExecRequest(ClientRequest *clientRequest);
+    void PushRequest(ClientRequest *clientRequest);
+    ClientRequest* PopProcessedRequest();
 private:
+    static const int queueSize = 1024;
+    static const int maxRequestAgeSec = 3.0;
     std::string connectString;
     bool initialized;
     bool stopFlag;
-    std::vector<DBConnect*> dbConnects;
+    std::vector<DBConnect*> dbConnectPool;
     std::vector<std::thread> workerThreads;
-    std::atomic_bool busy[MAX_THREADS];
-    std::atomic_int lastUsed;
-    bool finished[MAX_THREADS];
-    std::condition_variable condVars[MAX_THREADS];
-    std::mutex mutexes[MAX_THREADS];
-    ClientRequest* clientRequests[MAX_THREADS];
+    std::condition_variable conditionVar;
+    std::mutex lock;
+    boost::lockfree::queue<ClientRequest*> incomingRequests;
+    boost::lockfree::queue<ClientRequest*> processedRequests;
 
-    void WorkerThread(unsigned int index);
+    void WorkerThread(unsigned int index, DBConnect* dbConnect);
+    void ProcessRequest(unsigned int index, ClientRequest* request, DBConnect* dbConnect);
 };
 

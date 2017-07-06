@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <iostream>
 #include <string>
+#include <thread>
+#include <chrono>
 #ifdef _WIN32
     #include <conio.h>
     #include <Winsock2.h>
@@ -112,7 +114,7 @@ bool ComposeAndSendRequest(std::string origination, unsigned long requestNum, in
 
 	unsigned char buffer[1024];
 
-    if(psPacket.Init((SPSRequest*)buffer, sizeof(buffer), requestNum++, VALIDATEEX_REQ)) {
+    if(psPacket.Init((SPSRequest*)buffer, sizeof(buffer), requestNum, VALIDATEEX_REQ)) {
         printf("SPSRequest.Init failed, buffer too small" );
         return false;
     }
@@ -142,7 +144,7 @@ bool ComposeAndSendRequest(std::string origination, unsigned long requestNum, in
         (const void*)&partNum, sizeof(partNum));
     int len = psPacket.AddAttr((SPSRequest*)buffer, sizeof(buffer), VLD_SERVINGMSC,
         (const void*)servingMSC.data(), servingMSC.size());
-    std::cout << "Sending " << len << " bytes" << std::endl;
+    std::cout << "Sending request #" << requestNum << "(" << len << " bytes)" << std::endl;
 
     int serverLen = sizeof(serverAddr)  ;
     if(sendto(socket, (char*)buffer, len, 0, (sockaddr*)&serverAddr, serverLen) <= 0) {
@@ -222,7 +224,7 @@ int main(int argc, char* argv[])
 {
     unsigned int requestNum = 1;
     int port;
-	unsigned char buffer[10240];
+    unsigned char buffer[100240];
 
     if(argc<2) {
         printf("Usage: %s ip_address [port]", argv[0]);
@@ -235,12 +237,19 @@ int main(int argc, char* argv[])
         port = 5300;
 	}
 
-    int sock = socket(AF_INET, SOCK_DGRAM, 0);
+    int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (sock < 0)
     {
       printf("Unable to create socket AF_INET, SOCK_DGRAM.\n");
       exit(EXIT_FAILURE);
     }
+    int optval = 1;
+    setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
+    struct timeval tv;
+    tv.tv_sec = 0;
+    tv.tv_usec = 100000;
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+
     /* Initialize socket structure */
     struct sockaddr_in serv_addr;
     memset((char *) &serv_addr, 0, sizeof(serv_addr));
@@ -248,60 +257,62 @@ int main(int argc, char* argv[])
     serv_addr.sin_addr.s_addr = inet_addr(argv[1]);
     serv_addr.sin_port = htons(port);
 
-    std::cout << "Choose IMSI: \n\t1-2 - correct, \n\t3 - my test phone, \n\t4 - roaming, \n\t5 - missing OA in request, "
-        "\n\t6 - 100 requests pack\n\tq - quit \n\t"
+    std::cout << "Choose IMSI: \n\t1 - single request, \n\t4 - missing OA in request, "
+        "\n\t6 -300 requests with 30 ms delay"
+        "\n\t7 -500 requests with 5 ms delay"
+        "\n\t8 -100 requests with 500 ms delay"
+        "\n\tq - quit \n\t"
         "any other letter - read socket data:\n";
-	while (true) {
-		fd_set read_set;
-        struct timeval tv;
-        tv.tv_sec = 0;  // time-out
-        tv.tv_usec = 200;
-        FD_ZERO( &read_set );
-        FD_SET( sock, &read_set );
 
-		if (select(sock + 1, &read_set, NULL, NULL, &tv) != 0) {
-			int bytesReceived = recv(sock, (char*)buffer, sizeof(buffer), 0);
-			if (bytesReceived <= 0) {
-				printf("Error receiving data on socket: %d\nPress any key to exit ...", SOCK_ERR);
-				char c = getchar();
-				break;
-			}
-			printf("\n%d bytes received.\n", bytesReceived);
-			int bytesProcessed = 0;
-			while (bytesProcessed < bytesReceived) {
-				int nextLen = ParseNextResponseFromBuffer(buffer + bytesProcessed, bytesReceived);
-				if (nextLen < 0) {
-					break;
-				}
-				bytesProcessed += nextLen;
-			}
-			printf("\n----------------------------\n");
-		}
+	while (true) {
+        sockaddr_in senderAddr;
+        socklen_t senderAddrSize = sizeof(senderAddr);
+        int bytesReceived = recvfrom(sock, buffer, sizeof(buffer), 0,
+                                 reinterpret_cast<sockaddr*>(&senderAddr), &senderAddrSize);
+
+        if (bytesReceived <= 0 && errno != EAGAIN) {
+            printf("Error receiving data on socket: %d\nPress any key to exit ...", errno);
+            char c = getchar();
+            break;
+        }
+
+        if (bytesReceived > 0) {
+            printf("\n%d bytes received.\n", bytesReceived);
+            int bytesProcessed = 0;
+            while (bytesProcessed < bytesReceived) {
+                int nextLen = ParseNextResponseFromBuffer(buffer + bytesProcessed, bytesReceived);
+                if (nextLen < 0) {
+                    break;
+                }
+                bytesProcessed += nextLen;
+            }
+            printf("\n----------------------------\n");
+        }
 		else {
             std::string cmd;
             std::cin >> cmd;
 
             std::cout << "Entered option: " << cmd << std::endl;
-            std::string origination;
+            std::string origination = "79506656066";;
 			int requestsCount = 1;
+            int delay = 0;
             if (cmd == "1") {
-                origination = "79506656066";
-            }
-            else if (cmd == "2") {
-                origination = "79506656066";
-            }
-            else if (cmd == "3") {
-                origination = "79506656066";
-            }
-            else if (cmd == "4") {
-                requestType = keepAlive;
-            }
-            else if (cmd == "5") {
                 ;
             }
+            else if (cmd == "4") {
+                origination.clear();
+            }
             else if (cmd == "6") {
+                requestsCount = 300;
+                delay = 30000;
+            }
+            else if (cmd == "7") {
+                requestsCount = 500;
+                delay = 5000;
+            }
+            else if (cmd == "8") {
                 requestsCount = 100;
-                origination = "79506656066";
+                delay = 500000;
             }
             else if (cmd == "q" || cmd == "Q") {
                 std::cout << "Exit option entered, goodbye!" << std::endl;
@@ -313,6 +324,7 @@ int main(int argc, char* argv[])
 
 			for (int i = 0; i < requestsCount; i++) {
                 ComposeAndSendRequest(origination, requestNum++, sock, serv_addr);
+                usleep(delay);
 			}
 		}
 	}

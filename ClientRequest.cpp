@@ -7,8 +7,10 @@
 
 ClientRequest::ClientRequest(sockaddr_in& senderAddr) :
     clientAddr(senderAddr),
-    resultCode(0) //TODO
+    resultCode(resultCodeUnknown),
+    accepted(steady_clock::now())
 {}
+
 
 bool ClientRequest::ValidateAndSetRequestParams(uint32_t reqNum, const psAttrMap& requestAttrs, std::string& errorDescr)
 {
@@ -53,7 +55,7 @@ bool ClientRequest::SetStringParam(const psAttrMap &requestAttrs, int paramType,
     value.resize(iter->second.m_usDataLen);
     std::copy(static_cast<char*>(iter->second.m_pvData),
               static_cast<char*>(iter->second.m_pvData) + iter->second.m_usDataLen, value.begin());
-    logWriter.Write(paramName + ": " + value, mainThreadIndex, notice);
+    logWriter.Write(paramName + ": " + value, mainThreadIndex, debug);
     return true;
 }
 

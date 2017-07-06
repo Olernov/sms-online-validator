@@ -28,6 +28,7 @@ private:
     int ProcessNextRequestFromBuffer(const char* buffer, int maxLen, sockaddr_in& senderAddr);
     bool SendNotAcceptedResponse(sockaddr_in &senderAddr, uint32_t requestNum, std::string errDescr);
 	bool SendIAMAliveResponse(sockaddr_in& senderAddr, uint32_t requestNum, std::string errDescr);
+    void SendClientResponses();
     std::string IPAddr2Text(const in_addr& pinAddr);
 
 };

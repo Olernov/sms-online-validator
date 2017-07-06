@@ -1,3 +1,4 @@
+#include <sstream>
 #include "ConnectionPool.h"
 #include "otl_utils.h"
 
@@ -6,27 +7,25 @@ extern LogWriterOtl logWriter;
 
 ConnectionPool::ConnectionPool() :
     initialized(false),
-    stopFlag(false)
+    stopFlag(false),
+    incomingRequests(queueSize),
+    processedRequests(queueSize)
 {
-    lastUsed.store(0);
 }
 
 
 ConnectionPool::~ConnectionPool()
 {
-    for(auto& db : dbConnects) {
-        delete db;
-    }
     stopFlag = true;
-    for (int i = 0; i < workerThreads.size(); ++i) {
-        condVars[i].notify_one();
-    }
+    conditionVar.notify_all();
     for(auto& thr : workerThreads) {
         if (thr.joinable()) {
             thr.join();
         }
     }
-
+    for(auto& db : dbConnectPool) {
+        delete db;
+    }
 }
 
 
@@ -36,9 +35,11 @@ bool ConnectionPool::Initialize(const Config& config, std::string& errDescriptio
         errDescription = "Connection pool is already initialized";
         return false;
     }
+    const int OTL_MULTITHREADED_MODE = 1;
+    otl_connect::otl_initialize(OTL_MULTITHREADED_MODE);
     connectString = config.connectString;
-    dbConnects.resize(config.connectionCount);
-    for(auto& db : dbConnects) {
+    dbConnectPool.resize(config.connectionCount);
+    for(auto& db : dbConnectPool) {
         try {
             db = new DBConnect;
             db->rlogon(connectString.c_str());
@@ -49,12 +50,8 @@ bool ConnectionPool::Initialize(const Config& config, std::string& errDescriptio
             return false;
         }
     }
-    for (unsigned int index = 0; index < config.connectionCount; ++index) {
-        busy[index] = false;
-        finished[index] = false;
-    }
     for (unsigned int i = 0; i < config.connectionCount; ++i) {
-        workerThreads.push_back(std::thread(&ConnectionPool::WorkerThread, this, i));
+        workerThreads.push_back(std::thread(&ConnectionPool::WorkerThread, this, i, dbConnectPool[i]));
     }
     logWriter << "Connection pool initialized successfully";
     initialized = true;
@@ -62,108 +59,89 @@ bool ConnectionPool::Initialize(const Config& config, std::string& errDescriptio
 }
 
 
-void ConnectionPool::ExecRequest(ClientRequest* clientRequest)
+void ConnectionPool::PushRequest(ClientRequest *clientRequest)
 {
-    unsigned int connIndex;
-    if (!TryAcquire(connIndex)) {
-        logWriter.Write("Unable to acqure connection to database to execute request #"
-                        + std::to_string(clientRequest->requestNum), mainThreadIndex, error);
-        return;
-    }
-    logWriter.Write("Acquired connection #" + std::to_string(connIndex), mainThreadIndex, debug);
-    clientRequests[connIndex] = clientRequest;
-    condVars[connIndex].notify_one();
+    incomingRequests.push(clientRequest);
+    conditionVar.notify_one();
+
 }
 
 
-bool ConnectionPool::TryAcquire(unsigned int& acquiredIndex)
-{
-    using namespace std::chrono;
-    if (!initialized || stopFlag) {
-        logWriter.Write("Attempt to acquire on not initialized or being in shutdown connection pool",
-                        mainThreadIndex, error);
-        return false;
-    }
 
-    const int maxMilliSecondsToAcquire = 800;
-    int cycleCounter = 0;
-    auto startTime =  high_resolution_clock::now();
-    bool firstCycle = true;
-    while (true) {
-        // Start looping from last used connection + 1 to ensure consequent connection usage and
-        // to avoid suspending rarely used connections
-        for (size_t i = (firstCycle ? ((lastUsed + 1) %  dbConnects.size()) : 0); i < dbConnects.size(); ++i) {
-            bool oldValue = busy[i];
-            if (!oldValue) {
-                if (busy[i].compare_exchange_weak(oldValue, true)) {
-                    acquiredIndex = i;
-                    finished[i] = false;
-                    lastUsed.store(i);
-                    return true;
-                }
-            }
-        }
-        firstCycle = false;
-        ++cycleCounter;
-        if (cycleCounter > 1000) {
-            auto now = high_resolution_clock::now();
-            auto timeSpan = duration_cast<milliseconds>(now - startTime);
-            if (timeSpan.count() > maxMilliSecondsToAcquire) {
-                return false;
-            }
-            cycleCounter = 0;
-        }
-    }
-}
 
-void ConnectionPool::WorkerThread(unsigned int index)
+void ConnectionPool::WorkerThread(unsigned int index, DBConnect* dbConnect)
 {
     while (!stopFlag) {
-        std::unique_lock<std::mutex> locker(mutexes[index]);
-        while(!stopFlag && !busy[index])  {
-            condVars[index].wait(locker);
-        }
-        if (!stopFlag && busy[index] && !finished[index]) {
-            std::string errDescription;
-            try {
-                otl_stream dbStream;
-                dbStream.open(1,
-                        "call ValidateSMS(:oa /*char[100],in*/, :oa_flags/*short,in*/, "
-                        ":da /*char[100],in*/, :da_flags/*sort,in*/, "
-                        ":ref_num /*short,in*/, :total /*short,in*/, :part_num /*short,in*/, :serving_msc /*char[100],in*/)"
-                        " into :res /*long,out*/",
-                        *dbConnects[index]);
-                dbStream
-                       << clientRequests[index]->origination
-                       << static_cast<short>(clientRequests[index]->originationFlags)
-                       << clientRequests[index]->destination
-                       << static_cast<short>(clientRequests[index]->destinationFlags)
-                       << static_cast<short>(clientRequests[index]->referenceNum)
-                       << static_cast<short>(clientRequests[index]->totalParts)
-                       << static_cast<short>(clientRequests[index]->partNum)
-                       << clientRequests[index]->servingMSC;
-                long result;
-                dbStream >> result;
-                clientRequests[index]->resultCode = result;
+        std::unique_lock<std::mutex> ul(lock);
+        conditionVar.wait(ul);
+        ul.unlock();
+        ClientRequest* request;
 
-                logWriter.Write("Request #" + std::to_string(clientRequests[index]->requestNum)
-                                + " processing finished. Sending result to client", index);
-                //clientRequests[index]->SendRequestResultToClient();
-                //delete clientRequests[index];
-                //m_resultCodes[index] = res;
-                //m_results[index] = errDescription;
+        while (incomingRequests.pop(request)) {
+            double requestAgeSec = duration<double>(steady_clock::now() - request->accepted).count();
+            if (requestAgeSec < maxRequestAgeSec) {
+                ProcessRequest(index, request, dbConnect);
             }
-            catch(const otl_exception& ex) {
-                logWriter << "**** DB ERROR ****" + crlf + OTL_Utils::OtlExceptionToText(ex);
-                dbConnects[index]->reconnect();
+            else {
+                std::stringstream ss;
+                ss << "Request #" << request->requestNum << " discarded due to max age exceeding ("
+                   << round(requestAgeSec * 1000) << " ms)";
+                logWriter << ss.str();
             }
-            finished[index] = true;
-            condVars[index].notify_one();
-            busy[index] = false;
         }
     }
 }
 
+
+void ConnectionPool::ProcessRequest(unsigned int index, ClientRequest* request, DBConnect* dbConnect)
+{
+    try {
+        otl_stream dbStream;
+        dbStream.open(1,
+                "call ValidateSMS(:oa /*char[100],in*/, :oa_flags/*short,in*/, "
+                ":da /*char[100],in*/, :da_flags/*sort,in*/, "
+                ":ref_num /*short,in*/, :total /*short,in*/, :part_num /*short,in*/, :serving_msc /*char[100],in*/)"
+                " into :res /*long,out*/",
+                *dbConnect);
+        dbStream
+               << request->origination
+               << static_cast<short>(request->originationFlags)
+               << request->destination
+               << static_cast<short>(request->destinationFlags)
+               << static_cast<short>(request->referenceNum)
+               << static_cast<short>(request->totalParts)
+               << static_cast<short>(request->partNum)
+               << request->servingMSC;
+        long result;
+        dbStream >> result;
+        request->resultCode = result;
+        processedRequests.push(request);
+        std::stringstream ss;
+        ss << "Request #" << request->requestNum << " processed by thread #" << index
+           << " in " << round(duration<double>(steady_clock::now() - request->accepted).count() * 1000)  << " ms."
+           << " Result: " << result;
+        logWriter << ss.str();
+    }
+    catch(const otl_exception& ex) {
+        request->resultDescr = "**** DB ERROR ****" + crlf + OTL_Utils::OtlExceptionToText(ex);
+        request->resultCode = ClientRequest::resultCodeDbException;
+        processedRequests.push(request);
+        logWriter.Write("Error while processing request #" + std::to_string(request->requestNum)
+                        + ": " + request->resultDescr);
+        dbConnect->reconnect();
+    }
+}
+
+ClientRequest* ConnectionPool::PopProcessedRequest()
+{
+    ClientRequest* request;
+    if (processedRequests.pop(request)) {
+        return request;
+    }
+    else {
+        return nullptr;
+    }
+}
 
 
 

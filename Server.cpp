@@ -63,6 +63,7 @@ Server::~Server()
 void Server::Run()
 {
 	while (!shutdownInProgress) {
+        SendClientResponses();
         char receiveBuffer[65000];
         sockaddr_in senderAddr;
 #ifndef _WIN32
@@ -82,8 +83,21 @@ void Server::Run()
                     + std::to_string(errno) + "). ";
         }
     }
+    SendClientResponses();
 }
 
+
+void Server::SendClientResponses()
+{
+    ClientRequest* request;
+    std::string errorDescr;
+    while((request = connectionPool->PopProcessedRequest()) != nullptr) {
+        if (!request->SendRequestResultToClient(udpSocket, errorDescr)) {
+            logWriter.Write("SendRequestResultToClient error: " + errorDescr, mainThreadIndex, error);
+        }
+        delete request;
+    }
+}
 
 void Server::ProcessIncomingData(const char* buffer, int bufferSize, sockaddr_in& senderAddr)
 {
@@ -141,7 +155,7 @@ int Server::ProcessNextRequestFromBuffer(const char* buffer, int maxLen, sockadd
         return packetLen;
 	}
 	
-    connectionPool->ExecRequest(clientRequest);
+    connectionPool->PushRequest(clientRequest);
     //
     //logWriter << clientRequest.DumpResults();
     //if (!clientRequest.SendRequestResultToClient(udpSocket, errorDescr)) {
@@ -204,6 +218,7 @@ std::string Server::IPAddr2Text(const in_addr& inAddr)
 void Server::Stop()
 {
     shutdownInProgress = true;
+
 }
 
 
