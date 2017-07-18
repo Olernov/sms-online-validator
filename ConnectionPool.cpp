@@ -42,7 +42,7 @@ bool ConnectionPool::Initialize(const Config& config, std::string& errDescriptio
     for(auto& db : dbConnectPool) {
         try {
             db = new DBConnect;
-            db->rlogon(connectString.c_str());
+            db->rlogon(/*connectString*/ config.connectString.c_str());
         }
         catch(const otl_exception& ex) {
             errDescription = "**** DB ERROR while logging to DB: **** " +
@@ -81,6 +81,7 @@ void ConnectionPool::WorkerThread(unsigned int index, DBConnect* dbConnect)
             double requestAgeSec = duration<double>(steady_clock::now() - request->accepted).count();
             if (requestAgeSec < maxRequestAgeSec) {
                 ProcessRequest(index, request, dbConnect);
+                processedRequests.push(request);
             }
             else {
                 std::stringstream ss;
@@ -115,7 +116,6 @@ void ConnectionPool::ProcessRequest(unsigned int index, ClientRequest* request, 
         long result;
         dbStream >> result;
         request->resultCode = result;
-        processedRequests.push(request);
         std::stringstream ss;
         ss << "Request #" << request->requestNum << " processed by thread #" << index
            << " in " << round(duration<double>(steady_clock::now() - request->accepted).count() * 1000)  << " ms."
@@ -125,7 +125,6 @@ void ConnectionPool::ProcessRequest(unsigned int index, ClientRequest* request, 
     catch(const otl_exception& ex) {
         request->resultDescr = "**** DB ERROR ****" + crlf + OTL_Utils::OtlExceptionToText(ex);
         request->resultCode = ClientRequest::resultCodeDbException;
-        processedRequests.push(request);
         logWriter.Write("Error while processing request #" + std::to_string(request->requestNum)
                         + ": " + request->resultDescr);
         dbConnect->reconnect();

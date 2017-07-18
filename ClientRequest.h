@@ -36,7 +36,6 @@ public:
     static const int32_t resultCodeUnknown = -12;
     static const int32_t resultCodeDbException = -999;
 private:
-
     sockaddr_in clientAddr;
 
     bool SetStringParam(const psAttrMap& requestAttrs, int paramType, std::string paramName, std::string& value, std::string& errorDescr);

@@ -6,9 +6,9 @@
 #include "Common.h"
 
 ClientRequest::ClientRequest(sockaddr_in& senderAddr) :
-    clientAddr(senderAddr),
+    accepted(steady_clock::now()),
     resultCode(resultCodeUnknown),
-    accepted(steady_clock::now())
+    clientAddr(senderAddr)
 {}
 
 

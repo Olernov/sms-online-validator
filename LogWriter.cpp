@@ -43,9 +43,7 @@ void LogWriter::WriteThreadFunction()
 					char timeBuf[30];
 					strftime(timeBuf, 29, "%H:%M:%S", &messageTime);
                     SetLogStream(pMessage->m_time);
-					m_logStream << timeBuf << "  |  "
-                        << (pMessage->m_threadNum != mainThreadIndex ? std::to_string(pMessage->m_threadNum) : " ")
-						<< "  |  " << pMessage->m_message.c_str() << std::endl;
+                    m_logStream << timeBuf << "  |  " << pMessage->m_message.c_str() << std::endl;
 					delete pMessage;
 				}
 			}
