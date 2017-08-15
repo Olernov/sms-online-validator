@@ -37,12 +37,11 @@ bool ConnectionPool::Initialize(const Config& config, std::string& errDescriptio
     }
     const int OTL_MULTITHREADED_MODE = 1;
     otl_connect::otl_initialize(OTL_MULTITHREADED_MODE);
-    connectString = config.connectString;
     dbConnectPool.resize(config.connectionCount);
     for(auto& db : dbConnectPool) {
         try {
             db = new DBConnect;
-            db->rlogon(/*connectString*/ config.connectString.c_str());
+            db->rlogon(config.connectString.c_str());
         }
         catch(const otl_exception& ex) {
             errDescription = "**** DB ERROR while logging to DB: **** " +
@@ -78,7 +77,7 @@ void ConnectionPool::WorkerThread(unsigned int index, DBConnect* dbConnect)
         ClientRequest* request;
 
         while (incomingRequests.pop(request)) {
-            double requestAgeSec = duration<double>(steady_clock::now() - request->accepted).count();
+            double requestAgeSec = duration<double>(system_clock::now() - request->accepted).count();
             if (requestAgeSec < maxRequestAgeSec) {
                 ProcessRequest(index, request, dbConnect);
                 processedRequests.push(request);
@@ -118,7 +117,7 @@ void ConnectionPool::ProcessRequest(unsigned int index, ClientRequest* request, 
         request->resultCode = result;
         std::stringstream ss;
         ss << "Request #" << request->requestNum << " processed by thread #" << index
-           << " in " << round(duration<double>(steady_clock::now() - request->accepted).count() * 1000)  << " ms."
+           << " in " << round(duration<double>(system_clock::now() - request->accepted).count() * 1000)  << " ms."
            << " Result: " << result;
         logWriter << ss.str();
     }

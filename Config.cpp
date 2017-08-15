@@ -1,9 +1,10 @@
 #include "Config.h"
-
+#include "Common.h"
 
 Config::Config() :
     serverPort(5300),
     connectionCount(2),
+    kafkaTopic("sms-events"),
     logLevel(notice)
 {
 }
@@ -73,7 +74,13 @@ void Config::ReadConfigFile(std::ifstream& configStream)
                 throw std::runtime_error("Wrong value passed for " + option_name + ".");
             }
         }
-		else if (!option_name.empty()){
+        else if (option_name == kafkaBrokerParamName) {
+            kafkaBroker = option_value;
+        }
+        else if (option_name == kafkaTopicParamName) {
+            kafkaTopic = option_value;
+        }
+        else if (!option_name.empty()){
             throw std::runtime_error("Unknown parameter " + option_name + " found");
         }
 	}	
@@ -106,6 +113,8 @@ std::string Config::DumpAllSettings()
     return serverPortParamName + ": " + std::to_string(serverPort) + crlf +
 		logDirParamName + ": " + logDir + crlf +
 		connectionCountParamName + ": " + std::to_string(connectionCount) + crlf +
-		logLevelParamName + ": " + (logLevel == error ? "error" : (logLevel == debug ? "debug" : "notice")) + crlf;
+        kafkaBrokerParamName + ": " + kafkaBroker + crlf +
+        kafkaTopicParamName + ": " + kafkaTopic + crlf +
+       logLevelParamName + ": " + (logLevel == error ? "error" : (logLevel == debug ? "debug" : "notice")) + crlf;
 }
 

@@ -29,7 +29,7 @@ public:
     uint8_t totalParts;
     std::string servingMSC;
 
-    steady_clock::time_point accepted;
+    system_clock::time_point accepted;
     int32_t resultCode;
     std::string resultDescr;
 

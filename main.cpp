@@ -23,86 +23,11 @@ void SignalHandler(int signum, siginfo_t *info, void *ptr)
 }
 #endif
 
-//void TestCommandSender(int index, int commandsNum, int minSleepTime)
-//{
-//	srand((unsigned int)time(NULL));
-//	logWriter.Write(std::string("Started test command sender thread #") + std::to_string(index));
-//	for (int i = 0; i < commandsNum; ++i) {
-//		char* task = new char[50];
-//		char* result = new char[MAX_DMS_RESPONSE_LEN];
-//		switch (i % 3) {
-//		case 0:
-//			sprintf_s(task, 50, "HGSDC:MSISDN=79047186560,SUD=CLIP-%d;", rand() % 5);
-//			break;
-//		case 1:
-//			sprintf_s(task, 50, "HGSDP:MSISDN=79047172074,LOC;");
-//			break;
-//		case 2:
-//			sprintf_s(task, 50, "MGSSP:IMSI=250270100520482;");
-//			break;
-//		}
-//		result[0] = '\0';
-//		std::this_thread::sleep_for(std::chrono::seconds(minSleepTime + rand() % 3));
-//		delete [] task;
-//		delete [] result;
-//	}
-//}
 
 void printUsage(char* programName)
 {
     std::cerr << "Usage: " << std::endl << programName << " <config-file> [-test]" << std::endl;
 }
-
-//void RunKeyboardTests(ConnectionPool& connectionPool)
-//{
-//	char c;
-//	while (true) {
-//		std::cout << "Choose IMSI: 1-2 - correct, 3 - unregistered, 4 - roaming, 9 - wrong (too long), q - quit: ";
-//		std::cin >> c;
-//		if (c == 'q' || c == 'Q') {
-//			break;
-//		}
-
-//		ClientRequest clientRequest(0);
-//		clientRequest.requestNum = 1;
-//		switch (c) {
-//		case '1':
-//			clientRequest.requestType = stateQuery;
-//			clientRequest.imsi = 250270100520482;
-//			break;
-//		case '2':
-//			clientRequest.requestType = stateQuery;
-//			clientRequest.imsi = 250270100307757;
-//			break;
-//		case '3':
-//			clientRequest.requestType = stateQuery;
-//			clientRequest.imsi = 250270100273000;
-//			break;
-//		case '4':
-//			clientRequest.requestType = stateQuery;
-//			clientRequest.imsi = 250270100604804;
-//			break;
-//		case '9':
-//			clientRequest.requestType = stateQuery;
-//			clientRequest.imsi = 25027010052048200;
-//			break;
-//		default:
-//			std::cout << "Wrong option entered, try again" << std::endl;
-//			continue;
-//		}
-//		unsigned int connIndex;
-//		if (!connectionPool.TryAcquire(connIndex)) {
-//			std::cout << "Unable to acqure connection for request execution." << std::endl;
-//			continue;
-//		}
-//		std::cout << "Acquired connection #" + std::to_string(connIndex) << std::endl;
-//		std::string resultDescr;
-
-//		int requestRes = connectionPool.ExecRequest(connIndex, clientRequest);
-//		std::cout << "Result: " << requestRes << " (" << resultDescr << ")" << std::endl;
-//	}
-//}
-
 
 int main(int argc, char* argv[])
 {
@@ -132,7 +57,7 @@ int main(int argc, char* argv[])
     }
 
 #ifndef _WIN32
-    const std::string pidFilename = "/var/run/sms-online.pid";
+    const std::string pidFilename = "/var/run/sms-validator.pid";
     std::ofstream pidFile(pidFilename, std::ofstream::out);
     if (pidFile.is_open()) {
         pidFile << getpid();
@@ -159,7 +84,7 @@ int main(int argc, char* argv[])
             exit(EXIT_FAILURE);
         }
 
-        if (!server.Initialize(config.serverPort, &connectionPool, errDescription)) {
+        if (!server.Initialize(config, &connectionPool, errDescription)) {
             std::cerr << "Unable to initialize server: " << errDescription << ". Exiting." << std::endl;
             exit(EXIT_FAILURE);
         }

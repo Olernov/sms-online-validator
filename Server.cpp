@@ -3,7 +3,6 @@
 #include "Server.h"
 #include "LogWriterOtl.h"
 
-
 extern LogWriterOtl logWriter;
 
 void CloseSocket(int socket)
@@ -18,14 +17,15 @@ void CloseSocket(int socket)
 }
 
 
-
 Server::Server() :
     shutdownInProgress(false),
-    connectionPool(nullptr)
+    connectionPool(nullptr),
+    kafkaGlobalConf(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL)),
+    kafkaTopicConf(RdKafka::Conf::create(RdKafka::Conf::CONF_TOPIC))
 {}
 
 
-bool Server::Initialize(unsigned int port,  ConnectionPool* cp, std::string& errDescription)
+bool Server::Initialize(const Config& config,  ConnectionPool* cp, std::string& errDescription)
 {
     udpSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (udpSocket < 0) {
@@ -44,12 +44,34 @@ bool Server::Initialize(unsigned int port,  ConnectionPool* cp, std::string& err
 	memset((char *) &serverAddr, 0, sizeof(serverAddr));
 	serverAddr.sin_family = AF_INET;
 	serverAddr.sin_addr.s_addr = htonl(INADDR_ANY);
-	serverAddr.sin_port = htons(port);
+    serverAddr.sin_port = htons(config.serverPort);
     if (bind(udpSocket, (struct sockaddr *) &serverAddr, sizeof(serverAddr)) != 0) {
         errDescription = "Failed to call bind on server socket. Error #" + std::to_string(errno);
         return false;
 	}
     connectionPool = cp;
+    if (!config.kafkaBroker.empty()) {
+        std::string errstr;
+        if (kafkaGlobalConf->set("bootstrap.servers", config.kafkaBroker, errstr) != RdKafka::Conf::CONF_OK
+                || kafkaGlobalConf->set("group.id", "pcrf-emitter", errstr) != RdKafka::Conf::CONF_OK
+                || kafkaGlobalConf->set("api.version.request", "true", errstr) != RdKafka::Conf::CONF_OK) {
+            errDescription = "Failed to set kafka global conf: " + errstr;
+            return false;
+        }
+        kafkaGlobalConf->set("event_cb", &eventCb, errstr);
+
+        kafkaProducer = std::unique_ptr<RdKafka::Producer>(RdKafka::Producer::create(kafkaGlobalConf.get(), errstr));
+        if (!kafkaProducer) {
+            errDescription = "Failed to create kafka producer: " + errstr;
+            return false;
+        }
+        kafkaTopic = config.kafkaTopic;
+    }
+    else {
+        kafkaProducer = nullptr;
+        logWriter << "Kafka broker is not set. SMS Validator will not log events to Kafka";
+    }
+        
     return true;
 }
 
@@ -84,20 +106,9 @@ void Server::Run()
         }
     }
     SendClientResponses();
+    WaitForKafkaQueue();
 }
 
-
-void Server::SendClientResponses()
-{
-    ClientRequest* request;
-    std::string errorDescr;
-    while((request = connectionPool->PopProcessedRequest()) != nullptr) {
-        if (!request->SendRequestResultToClient(udpSocket, errorDescr)) {
-            logWriter.Write("SendRequestResultToClient error: " + errorDescr, mainThreadIndex, error);
-        }
-        delete request;
-    }
-}
 
 void Server::ProcessIncomingData(const char* buffer, int bufferSize, sockaddr_in& senderAddr)
 {
@@ -188,6 +199,70 @@ bool Server::SendNotAcceptedResponse(sockaddr_in& senderAddr, uint32_t requestNu
 }
 
 
+void Server::SendClientResponses()
+{
+    ClientRequest* request;
+    std::string errorDescr;
+    bool responseSendSuccess;
+    while((request = connectionPool->PopProcessedRequest()) != nullptr) {
+        if (request->SendRequestResultToClient(udpSocket, errorDescr)) {
+            responseSendSuccess = true;
+        }
+        else {
+            responseSendSuccess = false;
+            logWriter.Write("SendRequestResultToClient error: " + errorDescr, mainThreadIndex, error);
+        }
+        if (kafkaProducer != nullptr) {
+            SendSmsToKafka(request, responseSendSuccess);
+        }
+        delete request;
+    }
+}
+
+
+void Server::SendSmsToKafka(ClientRequest* request, bool responseSendSuccess)
+{
+    SMS_CDR cdr;
+    cdr.origination = request->origination;
+    cdr.destination = request->destination;
+    cdr.oaflags = request->originationFlags;
+    cdr.daflags = request->destinationFlags;
+    cdr.referenceNum = request->referenceNum;
+    cdr.totalParts = request->totalParts;
+    cdr.partNumber = request->partNum;
+    cdr.servingMSC = request->servingMSC;
+    cdr.validationTime = system_clock::to_time_t(request->accepted) * 1000;
+    cdr.validationRes = request->resultCode;
+    cdr.responseSendSuccess = responseSendSuccess;
+
+    std::vector<uint8_t> rawData = EncodeCdr(cdr);
+    std::string errstr;
+    RdKafka::ErrorCode resp = kafkaProducer->produce(kafkaTopic, RdKafka::Topic::PARTITION_UA,
+                               RdKafka::Producer::RK_MSG_COPY,
+                               rawData.data(), rawData.size(), nullptr, 0,
+                               time(nullptr) * 1000 /*milliseconds*/, nullptr);
+
+    if (resp != RdKafka::ERR_NO_ERROR) {
+        logWriter << "Kafka produce failed: " + RdKafka::err2str(resp);
+    }
+}
+
+
+std::vector<uint8_t> Server::EncodeCdr(const SMS_CDR &avroCdr)
+{
+    std::unique_ptr<avro::OutputStream> out(avro::memoryOutputStream());
+    avro::EncoderPtr encoder(avro::binaryEncoder());
+    encoder->init(*out);
+    avro::encode(*encoder, avroCdr);
+    encoder->flush();
+    std::vector<uint8_t> rawData(out->byteCount());
+    std::unique_ptr<avro::InputStream> in = avro::memoryInputStream(*out);
+    avro::StreamReader reader(*in);
+    reader.readBytes(&rawData[0], out->byteCount());
+    return rawData;
+}
+
+
 bool Server::SendIAMAliveResponse(sockaddr_in& senderAddr, uint32_t requestNum,  std::string errDescr)
 {
 	CPSPacket pspResponse;
@@ -223,3 +298,45 @@ void Server::Stop()
 
 
 
+KafkaEventCallback::KafkaEventCallback() :
+    allBrokersDown(false)
+{}
+
+void KafkaEventCallback::event_cb (RdKafka::Event &event)
+{
+    switch (event.type())
+    {
+      case RdKafka::Event::EVENT_ERROR:
+        logWriter << "Kafka ERROR (" + RdKafka::err2str(event.err()) + "): " + event.str();
+        if (event.err() == RdKafka::ERR__ALL_BROKERS_DOWN)
+            allBrokersDown = true;
+        break;
+      case RdKafka::Event::EVENT_STATS:
+        logWriter << "Kafka STATS: " + event.str();
+        break;
+      case RdKafka::Event::EVENT_LOG:
+        logWriter << "Kafka LOG-" + std::to_string(event.severity()) + "-" + event.fac() + ":" + event.str();
+        break;
+      default:
+        logWriter << "Kafka EVENT " + std::to_string(event.type()) + " (" +
+                     RdKafka::err2str(event.err()) + "): " + event.str();
+        break;
+    }
+}
+
+
+
+void Server::WaitForKafkaQueue()
+{
+    const int producerPollTimeoutMs = 1000;
+    std::string lastErrorMessage;
+    while (kafkaProducer->outq_len() > 0)   {
+        std::string message = std::to_string(kafkaProducer->outq_len()) + " message(s) are in Kafka producer queue. "
+                "Waiting to be sent...";
+        if (message != lastErrorMessage) {
+            logWriter << message;
+            lastErrorMessage = message;
+        }
+        kafkaProducer->poll(producerPollTimeoutMs);
+    }
+}

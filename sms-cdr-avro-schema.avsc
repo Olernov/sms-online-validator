@@ -1,0 +1,17 @@
+{"namespace": "ru.tenet.databus.avro.schema.domain",
+ "type": "record",
+ "name": "SMS_CDR",
+ "fields": [
+     {"name": "origination", "type": "string"},
+     {"name": "destination", "type": "string"},
+     {"name": "oaflags", "type": "int"},
+     {"name": "daflags", "type": "int"},
+     {"name": "referenceNum", "type": "int"},
+     {"name": "totalParts", "type": "int"},
+     {"name": "partNumber", "type": "int"},
+     {"name": "servingMSC", "type": "string"},
+     {"name": "validationTime", "type": "long", "logicalType": "timestamp-millis"},
+     {"name": "validationRes", "type": "int"},
+     {"name": "responseSendSuccess", "type": "boolean"}
+  ]
+}

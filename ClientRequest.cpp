@@ -6,13 +6,14 @@
 #include "Common.h"
 
 ClientRequest::ClientRequest(sockaddr_in& senderAddr) :
-    accepted(steady_clock::now()),
+    accepted(system_clock::now()),
     resultCode(resultCodeUnknown),
     clientAddr(senderAddr)
 {}
 
 
-bool ClientRequest::ValidateAndSetRequestParams(uint32_t reqNum, const psAttrMap& requestAttrs, std::string& errorDescr)
+bool ClientRequest::ValidateAndSetRequestParams(uint32_t reqNum, const psAttrMap& requestAttrs,
+                                                std::string& errorDescr)
 {
 	requestNum = reqNum;
     if (!SetStringParam(requestAttrs, VLD_OA, "Origination address", origination, errorDescr)) {
