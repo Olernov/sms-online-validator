@@ -1,5 +1,5 @@
 #pragma once
-#define OTL_ORA11G // Compile OTL 4.0/OCI9i
+#define OTL_ORA11G_R2 // Compile OTL 4.0/OCI9i
 // #define OTL_ORA8
 // #define OTL_ORA8I
 
@@ -42,6 +42,7 @@ const OTL_BIGINT BIGINT_VAL1=12345678901234000;
 // Since 64-bit integers are not part of the ANSI C++
 // standard, this definition is compiler specific.
 #define OTL_BIGINT long long
+#define OTL_UBIGINT unsigned long long
 
 const OTL_BIGINT BIGINT_VAL1=12345678901234000LL;
 
@@ -50,20 +51,20 @@ const OTL_BIGINT BIGINT_VAL1=12345678901234000LL;
 // Since 64-bit ineteger conversion functions are
 // not part of the ANSI C++ standard, the code
 // below is compiler specific.
-#define OTL_STR_TO_BIGINT(str,n)                \
-{                                               \
-  n=strtoll(str,0,10);                          \
-}
+/* #define OTL_STR_TO_BIGINT(str,n)                \
+//{                                               \
+//  n=strtoll(str,0,10);                          \
+}*/
 
 // Defining a bigint-to-string conversion 
 // that is used by OTL internally.
 // Since 64-bit ineteger conversion functions are
 // not part of the ANSI C++ standard, the code
 // below is compiler specific
-#define OTL_BIGINT_TO_STR(n,str)                \
-{                                               \
-  sprintf(str,"%lld",n);                        \
-}
+/*#define OTL_BIGINT_TO_STR(n,str)                \
+//{                                               \
+//  sprintf(str,"%lld",n);                        \
+}*/
 
 
 #endif

@@ -37,7 +37,7 @@ bool Server::Initialize(const Config& config,  ConnectionPool* cp, std::string& 
     setsockopt(udpSocket, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
     struct timeval tv;
     tv.tv_sec = 0;
-    tv.tv_usec = 100000;
+    tv.tv_usec = 1000;
     setsockopt(udpSocket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 #endif
 	struct sockaddr_in serverAddr;
@@ -167,12 +167,7 @@ int Server::ProcessNextRequestFromBuffer(const char* buffer, int maxLen, sockadd
 	}
 	
     connectionPool->PushRequest(clientRequest);
-    //
-    //logWriter << clientRequest.DumpResults();
-    //if (!clientRequest.SendRequestResultToClient(udpSocket, errorDescr)) {
-    //	logWriter.Write("SendRequestResultToClient error: " + errorDescr, mainThreadIndex, error);
-    //}
-	return packetLen;
+    return packetLen;
 }
 
 
@@ -207,12 +202,15 @@ void Server::SendClientResponses()
     while((request = connectionPool->PopProcessedRequest()) != nullptr) {
         if (request->SendRequestResultToClient(udpSocket, errorDescr)) {
             responseSendSuccess = true;
+            logWriter.Write("Response #" + std::to_string(request->requestNum)
+                            + " sent to client. ", mainThreadIndex, notice);
         }
         else {
             responseSendSuccess = false;
             logWriter.Write("SendRequestResultToClient error: " + errorDescr, mainThreadIndex, error);
         }
-        if (kafkaProducer != nullptr) {
+
+        if (kafkaProducer != nullptr && request->originationImsi != ClientRequest::origImsiNotGiven) {
             SendSmsToKafka(request, responseSendSuccess);
         }
         delete request;

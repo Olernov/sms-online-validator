@@ -109,8 +109,8 @@ bool ComposeAndSendRequest(uint64_t origImsi, std::string origMsisdn, unsigned l
                            sockaddr_in serverAddr)
 {
     CPSPacket psPacket;
-    const std::string destination = "79027111125";
-    const std::string servingMSC = "79506656021";
+    const std::string destination = "79506650600";
+    const std::string servingMSC =  "79506656021";
 
 	unsigned char buffer[1024];
 
@@ -119,9 +119,11 @@ bool ComposeAndSendRequest(uint64_t origImsi, std::string origMsisdn, unsigned l
         return false;
     }
 
-    uint64_t imsiNO = htonll(origImsi);
-    psPacket.AddAttr((SPSRequest*)buffer, sizeof(buffer), VLD_IMSI,
-        (const void*)&imsiNO, sizeof(imsiNO));
+    if (origImsi != 0) {
+        uint64_t imsiNO = htonll(origImsi);
+        psPacket.AddAttr((SPSRequest*)buffer, sizeof(buffer), VLD_IMSI,
+            (const void*)&imsiNO, sizeof(imsiNO));
+    }
 
     if (!origMsisdn.empty()) {
         psPacket.AddAttr((SPSRequest*)buffer, sizeof(buffer), VLD_OA,
@@ -261,7 +263,9 @@ int main(int argc, char* argv[])
     serv_addr.sin_addr.s_addr = inet_addr(argv[1]);
     serv_addr.sin_port = htons(port);
 
-    std::cout << "Choose IMSI: \n\t1 - single request, \n\t4 - missing OA in request, "
+    std::cout << "Choose option: \n\t1 - single request, "
+                 "\n\t2 - request with no origination IMSI"
+                 "\n\t4 - missing origination MSISDN in request (ERROR), "
         "\n\t6 -300 requests with 30 ms delay"
         "\n\t7 -500 requests with 5 ms delay"
         "\n\t8 -100 requests with 500 ms delay"
@@ -297,12 +301,15 @@ int main(int argc, char* argv[])
             std::cin >> cmd;
 
             std::cout << "Entered option: " << cmd << std::endl;
-            std::string origMsisdn = "79506656066";
-            uint64_t origImsi = 250270123456789;
+            std::string origMsisdn = "79027181238";
+            uint64_t origImsi = 250270100123865;
             int requestsCount = 1;
             int delay = 0;
             if (cmd == "1") {
                 ;
+            }
+            else if (cmd == "2") {
+                origImsi = 0;
             }
             else if (cmd == "4") {
                 origMsisdn.clear();

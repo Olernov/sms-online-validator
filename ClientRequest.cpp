@@ -6,6 +6,7 @@
 #include "Common.h"
 
 ClientRequest::ClientRequest(sockaddr_in& senderAddr) :
+    originationImsi(0),
     accepted(system_clock::now()),
     resultCode(resultCodeUnknown),
     clientAddr(senderAddr)
@@ -16,7 +17,8 @@ bool ClientRequest::ValidateAndSetRequestParams(uint32_t reqNum, const psAttrMap
                                                 std::string& errorDescr)
 {
 	requestNum = reqNum;
-    if (!SetIntegerParam(requestAttrs, VLD_IMSI, "Origination IMSI", 8, originationImsi, errorDescr)) {
+    if (!SetOptionalIntegerParam(requestAttrs, VLD_IMSI, "Origination IMSI", 8,
+                                 originationImsi, origImsiNotGiven, errorDescr)) {
         return false;
     }
     if (!SetStringParam(requestAttrs, VLD_OA, "Origination address", originationMsisdn, errorDescr)) {
@@ -26,19 +28,19 @@ bool ClientRequest::ValidateAndSetRequestParams(uint32_t reqNum, const psAttrMap
         return false;
     }
 
-    if (!SetIntegerParam(requestAttrs, VLD_OAFLAGS, "OAFLAGS", 1, originationFlags, errorDescr)) {
+    if (!SetRequiredIntegerParam(requestAttrs, VLD_OAFLAGS, "OAFLAGS", 1, originationFlags, errorDescr)) {
         return false;
     }
-    if (!SetIntegerParam(requestAttrs, VLD_DAFLAGS, "DAFLAGS", 1, destinationFlags, errorDescr)) {
+    if (!SetRequiredIntegerParam(requestAttrs, VLD_DAFLAGS, "DAFLAGS", 1, destinationFlags, errorDescr)) {
         return false;
     }
-    if (!SetIntegerParam(requestAttrs, VLD_REFNUM, "Reference number", 2, referenceNum, errorDescr)) {
+    if (!SetRequiredIntegerParam(requestAttrs, VLD_REFNUM, "Reference number", 2, referenceNum, errorDescr)) {
         return false;
     }
-    if (!SetIntegerParam(requestAttrs, VLD_TOTAL, "Total", 1, totalParts, errorDescr)) {
+    if (!SetRequiredIntegerParam(requestAttrs, VLD_TOTAL, "Total", 1, totalParts, errorDescr)) {
         return false;
     }
-    if (!SetIntegerParam(requestAttrs, VLD_PART, "Part number", 1, partNum, errorDescr)) {
+    if (!SetRequiredIntegerParam(requestAttrs, VLD_PART, "Part number", 1, partNum, errorDescr)) {
         return false;
     }
     if (!SetStringParam(requestAttrs, VLD_SERVINGMSC, "Serving MSC", servingMSC, errorDescr)) {
@@ -48,7 +50,7 @@ bool ClientRequest::ValidateAndSetRequestParams(uint32_t reqNum, const psAttrMap
 }
 
 
-bool ClientRequest::SetStringParam(const psAttrMap &requestAttrs, int paramType, std::string paramName,
+bool ClientRequest::SetStringParam(const psAttrMap &requestAttrs, int paramType, const std::string& paramName,
                                    std::string& value, std::string& errorDescr)
 {
     auto iter = requestAttrs.find(paramType);

@@ -36,13 +36,15 @@ public:
 
     static const int32_t resultCodeUnknown = -12;
     static const int32_t resultCodeDbException = -999;
+    static const uint64_t origImsiNotGiven = 0;
 private:
     sockaddr_in clientAddr;
 
-    bool SetStringParam(const psAttrMap& requestAttrs, int paramType, std::string paramName, std::string& value, std::string& errorDescr);
+    bool SetStringParam(const psAttrMap& requestAttrs, int paramType, const std::string& paramName,
+                        std::string& value, std::string& errorDescr);
 
     template<typename T>
-    bool SetIntegerParam(const psAttrMap& requestAttrs, int paramType, std::string paramName,
+    bool SetRequiredIntegerParam(const psAttrMap& requestAttrs, int paramType, const std::string& paramName,
                                         size_t requiredSize, T& value, std::string& errorDescr)
     {
         auto iter = requestAttrs.find(paramType);
@@ -72,5 +74,19 @@ private:
         }
         logWriter.Write(paramName + ": " + std::to_string(value), mainThreadIndex, debug);
         return true;
+    }
+
+    template<typename T>
+    bool SetOptionalIntegerParam(const psAttrMap& requestAttrs, int paramType, const std::string& paramName,
+                           size_t requiredSize, T& value, T defaultValue, std::string& errorDescr)
+    {
+        bool res = SetRequiredIntegerParam(requestAttrs, paramType, paramName, requiredSize,
+                                           value, errorDescr);
+        if (!res && errorDescr == paramName + " is missing in request") {
+            errorDescr.clear();
+            value = defaultValue;
+            return true;
+        }
+        return res;
     }
 };
