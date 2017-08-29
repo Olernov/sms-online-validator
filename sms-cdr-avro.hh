@@ -28,8 +28,9 @@
 #include "avro/Decoder.hh"
 
 struct SMS_CDR {
-    std::string origination;
-    std::string destination;
+    int64_t originationImsi;
+    std::string originationMsisdn;
+    std::string destinationMsisdn;
     int32_t oaflags;
     int32_t daflags;
     int32_t referenceNum;
@@ -40,8 +41,9 @@ struct SMS_CDR {
     int32_t validationRes;
     bool responseSendSuccess;
     SMS_CDR() :
-        origination(std::string()),
-        destination(std::string()),
+        originationImsi(int64_t()),
+        originationMsisdn(std::string()),
+        destinationMsisdn(std::string()),
         oaflags(int32_t()),
         daflags(int32_t()),
         referenceNum(int32_t()),
@@ -57,8 +59,9 @@ struct SMS_CDR {
 namespace avro {
 template<> struct codec_traits<SMS_CDR> {
     static void encode(Encoder& e, const SMS_CDR& v) {
-        avro::encode(e, v.origination);
-        avro::encode(e, v.destination);
+        avro::encode(e, v.originationImsi);
+        avro::encode(e, v.originationMsisdn);
+        avro::encode(e, v.destinationMsisdn);
         avro::encode(e, v.oaflags);
         avro::encode(e, v.daflags);
         avro::encode(e, v.referenceNum);
@@ -77,36 +80,39 @@ template<> struct codec_traits<SMS_CDR> {
                 it != fo.end(); ++it) {
                 switch (*it) {
                 case 0:
-                    avro::decode(d, v.origination);
+                    avro::decode(d, v.originationImsi);
                     break;
                 case 1:
-                    avro::decode(d, v.destination);
+                    avro::decode(d, v.originationMsisdn);
                     break;
                 case 2:
-                    avro::decode(d, v.oaflags);
+                    avro::decode(d, v.destinationMsisdn);
                     break;
                 case 3:
-                    avro::decode(d, v.daflags);
+                    avro::decode(d, v.oaflags);
                     break;
                 case 4:
-                    avro::decode(d, v.referenceNum);
+                    avro::decode(d, v.daflags);
                     break;
                 case 5:
-                    avro::decode(d, v.totalParts);
+                    avro::decode(d, v.referenceNum);
                     break;
                 case 6:
-                    avro::decode(d, v.partNumber);
+                    avro::decode(d, v.totalParts);
                     break;
                 case 7:
-                    avro::decode(d, v.servingMSC);
+                    avro::decode(d, v.partNumber);
                     break;
                 case 8:
-                    avro::decode(d, v.validationTime);
+                    avro::decode(d, v.servingMSC);
                     break;
                 case 9:
-                    avro::decode(d, v.validationRes);
+                    avro::decode(d, v.validationTime);
                     break;
                 case 10:
+                    avro::decode(d, v.validationRes);
+                    break;
+                case 11:
                     avro::decode(d, v.responseSendSuccess);
                     break;
                 default:
@@ -114,8 +120,9 @@ template<> struct codec_traits<SMS_CDR> {
                 }
             }
         } else {
-            avro::decode(d, v.origination);
-            avro::decode(d, v.destination);
+            avro::decode(d, v.originationImsi);
+            avro::decode(d, v.originationMsisdn);
+            avro::decode(d, v.destinationMsisdn);
             avro::decode(d, v.oaflags);
             avro::decode(d, v.daflags);
             avro::decode(d, v.referenceNum);

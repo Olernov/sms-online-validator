@@ -16,10 +16,13 @@ bool ClientRequest::ValidateAndSetRequestParams(uint32_t reqNum, const psAttrMap
                                                 std::string& errorDescr)
 {
 	requestNum = reqNum;
-    if (!SetStringParam(requestAttrs, VLD_OA, "Origination address", origination, errorDescr)) {
+    if (!SetIntegerParam(requestAttrs, VLD_IMSI, "Origination IMSI", 8, originationImsi, errorDescr)) {
         return false;
     }
-    if (!SetStringParam(requestAttrs, VLD_DA, "Destination address", destination, errorDescr)) {
+    if (!SetStringParam(requestAttrs, VLD_OA, "Origination address", originationMsisdn, errorDescr)) {
+        return false;
+    }
+    if (!SetStringParam(requestAttrs, VLD_DA, "Destination address", destinationMsisdn, errorDescr)) {
         return false;
     }
 

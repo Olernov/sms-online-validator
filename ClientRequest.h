@@ -20,8 +20,9 @@ public:
 	std::string DumpResults();
 
     uint32_t requestNum;
-    std::string origination;
-    std::string destination;
+    uint64_t originationImsi;
+    std::string originationMsisdn;
+    std::string destinationMsisdn;
     uint8_t originationFlags;
     uint8_t destinationFlags;
     uint16_t referenceNum;
@@ -61,6 +62,9 @@ private:
             break;
         case 2:
             value = ntohs(*static_cast<uint16_t*>(iter->second.m_pvData));
+            break;
+        case 8:
+            value = ntohll(*static_cast<uint64_t*>(iter->second.m_pvData));
             break;
         default:
             errorDescr = "SetIntegerParam: unexpected integer size " + std::to_string(requiredSize);

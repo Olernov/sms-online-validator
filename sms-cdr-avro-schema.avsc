@@ -2,8 +2,9 @@
  "type": "record",
  "name": "SMS_CDR",
  "fields": [
-     {"name": "origination", "type": "string"},
-     {"name": "destination", "type": "string"},
+     {"name": "originationImsi", "type": "long"},
+     {"name": "originationMsisdn", "type": "string"},
+     {"name": "destinationMsisdn", "type": "string"},
      {"name": "oaflags", "type": "int"},
      {"name": "daflags", "type": "int"},
      {"name": "referenceNum", "type": "int"},

@@ -223,8 +223,9 @@ void Server::SendClientResponses()
 void Server::SendSmsToKafka(ClientRequest* request, bool responseSendSuccess)
 {
     SMS_CDR cdr;
-    cdr.origination = request->origination;
-    cdr.destination = request->destination;
+    cdr.originationImsi = request->originationImsi;
+    cdr.originationMsisdn = request->originationMsisdn;
+    cdr.destinationMsisdn = request->destinationMsisdn;
     cdr.oaflags = request->originationFlags;
     cdr.daflags = request->destinationFlags;
     cdr.referenceNum = request->referenceNum;

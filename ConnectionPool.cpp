@@ -98,15 +98,17 @@ void ConnectionPool::ProcessRequest(unsigned int index, ClientRequest* request, 
     try {
         otl_stream dbStream;
         dbStream.open(1,
-                "call ValidateSMS(:oa /*char[100],in*/, :oa_flags/*short,in*/, "
-                ":da /*char[100],in*/, :da_flags/*sort,in*/, "
+                "call ValidateSMS(:oa_imsi /*bigint,in*/, :oa /*char[100],in*/, :oa_flags/*short,in*/, "
+                ":da /*char[100],in*/, :da_flags/*short,in*/, "
                 ":ref_num /*short,in*/, :total /*short,in*/, :part_num /*short,in*/, :serving_msc /*char[100],in*/)"
                 " into :res /*long,out*/",
                 *dbConnect);
         dbStream
-               << request->origination
+                // OTL does not work with unsigned 64-bit integers so we cast to signed here
+               << static_cast<signed long long>(request->originationImsi)
+               << request->originationMsisdn
                << static_cast<short>(request->originationFlags)
-               << request->destination
+               << request->destinationMsisdn
                << static_cast<short>(request->destinationFlags)
                << static_cast<short>(request->referenceNum)
                << static_cast<short>(request->totalParts)

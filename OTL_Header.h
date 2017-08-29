@@ -1,5 +1,5 @@
 #pragma once
-#define OTL_ORA9I // Compile OTL 4.0/OCI9i
+#define OTL_ORA11G // Compile OTL 4.0/OCI9i
 // #define OTL_ORA8
 // #define OTL_ORA8I
 

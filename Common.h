@@ -89,7 +89,8 @@ enum {
     VLD_REFNUM,
     VLD_TOTAL,
     VLD_PART,
-    VLD_SERVINGMSC
+    VLD_SERVINGMSC,
+    VLD_IMSI
 };
 
 static const uint16_t VALIDATEEX_REQ = 0x1100;

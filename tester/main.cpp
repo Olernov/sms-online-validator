@@ -105,7 +105,7 @@ int ConnectToVLRService(const char* ipAddress, int port)
 }
 
 
-bool ComposeAndSendRequest(std::string origination, unsigned long requestNum, int socket,
+bool ComposeAndSendRequest(uint64_t origImsi, std::string origMsisdn, unsigned long requestNum, int socket,
                            sockaddr_in serverAddr)
 {
     CPSPacket psPacket;
@@ -119,9 +119,13 @@ bool ComposeAndSendRequest(std::string origination, unsigned long requestNum, in
         return false;
     }
 
-    if (!origination.empty()) {
+    uint64_t imsiNO = htonll(origImsi);
+    psPacket.AddAttr((SPSRequest*)buffer, sizeof(buffer), VLD_IMSI,
+        (const void*)&imsiNO, sizeof(imsiNO));
+
+    if (!origMsisdn.empty()) {
         psPacket.AddAttr((SPSRequest*)buffer, sizeof(buffer), VLD_OA,
-            (const void*)origination.data(), origination.size());
+            (const void*)origMsisdn.data(), origMsisdn.size());
 	}
 
     psPacket.AddAttr((SPSRequest*)buffer, sizeof(buffer), VLD_DA,
@@ -293,14 +297,15 @@ int main(int argc, char* argv[])
             std::cin >> cmd;
 
             std::cout << "Entered option: " << cmd << std::endl;
-            std::string origination = "79506656066";;
-			int requestsCount = 1;
+            std::string origMsisdn = "79506656066";
+            uint64_t origImsi = 250270123456789;
+            int requestsCount = 1;
             int delay = 0;
             if (cmd == "1") {
                 ;
             }
             else if (cmd == "4") {
-                origination.clear();
+                origMsisdn.clear();
             }
             else if (cmd == "6") {
                 requestsCount = 300;
@@ -323,7 +328,7 @@ int main(int argc, char* argv[])
 			}
 
 			for (int i = 0; i < requestsCount; i++) {
-                ComposeAndSendRequest(origination, requestNum++, sock, serv_addr);
+                ComposeAndSendRequest(origImsi, origMsisdn, requestNum++, sock, serv_addr);
                 usleep(delay);
 			}
 		}
