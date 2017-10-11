@@ -301,8 +301,8 @@ int main(int argc, char* argv[])
             std::cin >> cmd;
 
             std::cout << "Entered option: " << cmd << std::endl;
-            std::string origMsisdn = "79027181238";
-            uint64_t origImsi = 250270100123865;
+            std::string origMsisdn = "79047186560";
+            uint64_t origImsi = 250270100370021;
             int requestsCount = 1;
             int delay = 0;
             if (cmd == "1") {

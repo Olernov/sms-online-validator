@@ -8,7 +8,7 @@
 #include "ClientRequest.h"
 #include "ConnectionPool.h"
 #include "rdkafkacpp.h"
-#include "sms-cdr-avro.hh"
+
 
 
 class KafkaEventCallback : public RdKafka::EventCb
@@ -47,8 +47,6 @@ private:
     bool SendNotAcceptedResponse(sockaddr_in &senderAddr, uint32_t requestNum, std::string errDescr);
 	bool SendIAMAliveResponse(sockaddr_in& senderAddr, uint32_t requestNum, std::string errDescr);
     void SendClientResponses();
-    void SendSmsToKafka(ClientRequest* request, bool responseSendSuccess);
-    std::vector<uint8_t> EncodeCdr(const SMS_CDR &avroCdr);
     std::string IPAddr2Text(const in_addr& pinAddr);
     void WaitForKafkaQueue();
 };

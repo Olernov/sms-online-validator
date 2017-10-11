@@ -2,6 +2,8 @@
 #include <signal.h>
 #include "Server.h"
 #include "LogWriterOtl.h"
+#include "ClientRequest.h"
+#include "SmsRequest.h"
 
 extern LogWriterOtl logWriter;
 
@@ -144,7 +146,7 @@ int Server::ProcessNextRequestFromBuffer(const char* buffer, int maxLen, sockadd
 	}
     logWriter.Write("request length: " + std::to_string(packetLen), mainThreadIndex, debug);
 	std::string errorDescr;
-    if(requestType != VALIDATEEX_REQ && requestType != ARE_Y_ALIVE) {
+    if(requestType != VALIDATEEX_REQ && requestType != ARE_Y_ALIVE && requestType != QUOTA_REQ) {
 		errorDescr = "Unsupported request type " + std::to_string(requestType);
         logWriter.Write(errorDescr, mainThreadIndex, error);
         SendNotAcceptedResponse(senderAddr, requestNum, errorDescr);
@@ -158,8 +160,17 @@ int Server::ProcessNextRequestFromBuffer(const char* buffer, int maxLen, sockadd
 
     logWriter.Write("Request #" + std::to_string(requestNum) + " received from " + IPAddr2Text(senderAddr.sin_addr) 
 		+ ". Size: " + std::to_string(packetLen) + " bytes.", mainThreadIndex, notice);
-    ClientRequest* clientRequest = new ClientRequest(senderAddr);
-    if (!clientRequest->ValidateAndSetRequestParams(requestNum, requestAttrs, errorDescr)) {
+    ClientRequest* clientRequest = nullptr;
+    switch (requestType) {
+    case VALIDATEEX_REQ:
+        clientRequest = new SmsRequest(senderAddr);
+        break;
+    case QUOTA_REQ:
+        // TODO:
+        break;
+    }
+
+    if (!clientRequest->ValidateAndSetParams(requestNum, requestAttrs, errorDescr)) {
         logWriter.Write("Request #" + std::to_string(requestNum) + " rejected due to: " + errorDescr,
                         mainThreadIndex, error);
         SendNotAcceptedResponse(senderAddr, requestNum, errorDescr);
@@ -200,7 +211,7 @@ void Server::SendClientResponses()
     std::string errorDescr;
     bool responseSendSuccess;
     while((request = connectionPool->PopProcessedRequest()) != nullptr) {
-        if (request->SendRequestResultToClient(udpSocket, errorDescr)) {
+        if (request->SendResultToClient(udpSocket, errorDescr)) {
             responseSendSuccess = true;
             logWriter.Write("Response #" + std::to_string(request->requestNum)
                             + " sent to client. ", mainThreadIndex, notice);
@@ -210,55 +221,11 @@ void Server::SendClientResponses()
             logWriter.Write("SendRequestResultToClient error: " + errorDescr, mainThreadIndex, error);
         }
 
-        if (kafkaProducer != nullptr && request->originationImsi != ClientRequest::origImsiNotGiven) {
-            SendSmsToKafka(request, responseSendSuccess);
+        if (kafkaProducer != nullptr) {
+            request->LogToKafka(kafkaProducer.get(), kafkaTopic, responseSendSuccess);
         }
         delete request;
     }
-}
-
-
-void Server::SendSmsToKafka(ClientRequest* request, bool responseSendSuccess)
-{
-    SMS_CDR cdr;
-    cdr.originationImsi = request->originationImsi;
-    cdr.originationMsisdn = request->originationMsisdn;
-    cdr.destinationMsisdn = request->destinationMsisdn;
-    cdr.oaflags = request->originationFlags;
-    cdr.daflags = request->destinationFlags;
-    cdr.referenceNum = request->referenceNum;
-    cdr.totalParts = request->totalParts;
-    cdr.partNumber = request->partNum;
-    cdr.servingMSC = request->servingMSC;
-    cdr.validationTime = system_clock::to_time_t(request->accepted) * 1000;
-    cdr.validationRes = request->resultCode;
-    cdr.responseSendSuccess = responseSendSuccess;
-
-    std::vector<uint8_t> rawData = EncodeCdr(cdr);
-    std::string errstr;
-    RdKafka::ErrorCode resp = kafkaProducer->produce(kafkaTopic, RdKafka::Topic::PARTITION_UA,
-                               RdKafka::Producer::RK_MSG_COPY,
-                               rawData.data(), rawData.size(), nullptr, 0,
-                               time(nullptr) * 1000 /*milliseconds*/, nullptr);
-
-    if (resp != RdKafka::ERR_NO_ERROR) {
-        logWriter << "Kafka produce failed: " + RdKafka::err2str(resp);
-    }
-}
-
-
-std::vector<uint8_t> Server::EncodeCdr(const SMS_CDR &avroCdr)
-{
-    std::unique_ptr<avro::OutputStream> out(avro::memoryOutputStream());
-    avro::EncoderPtr encoder(avro::binaryEncoder());
-    encoder->init(*out);
-    avro::encode(*encoder, avroCdr);
-    encoder->flush();
-    std::vector<uint8_t> rawData(out->byteCount());
-    std::unique_ptr<avro::InputStream> in = avro::memoryInputStream(*out);
-    avro::StreamReader reader(*in);
-    reader.readBytes(&rawData[0], out->byteCount());
-    return rawData;
 }
 
 

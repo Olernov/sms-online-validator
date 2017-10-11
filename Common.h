@@ -97,4 +97,6 @@ static const uint16_t VALIDATEEX_REQ = 0x1100;
 static const uint16_t VALIDATEEX_RESP = 0x1101;
 static const uint16_t ARE_Y_ALIVE = 0x0004;
 static const uint16_t I_AM_ALIVE = 0x0005;
+static const uint16_t QUOTA_REQ = 0x1200;
+static const uint16_t QUOTA_RESP = 0x1201;
 

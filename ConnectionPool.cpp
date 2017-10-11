@@ -66,16 +66,14 @@ void ConnectionPool::PushRequest(ClientRequest *clientRequest)
 }
 
 
-
-
 void ConnectionPool::WorkerThread(unsigned int index, DBConnect* dbConnect)
 {
     while (!stopFlag) {
         std::unique_lock<std::mutex> ul(lock);
         conditionVar.wait(ul);
         ul.unlock();
-        ClientRequest* request;
 
+        ClientRequest* request;
         while (incomingRequests.pop(request)) {
             double requestAgeSec = duration<double>(system_clock::now() - request->accepted).count();
             if (requestAgeSec < maxRequestAgeSec) {
@@ -93,35 +91,14 @@ void ConnectionPool::WorkerThread(unsigned int index, DBConnect* dbConnect)
 }
 
 
-void ConnectionPool::ProcessRequest(unsigned int index, ClientRequest* request, DBConnect* dbConnect)
+void ConnectionPool::ProcessRequest(unsigned int index, ClientRequest *request, DBConnect* dbConnect)
 {
     try {
-        otl_stream dbStream;
-        dbStream.open(1,
-                "call ValidateSMS(:oa_imsi /*ubigint,inout*/, :oa /*char[100],in*/, :oa_flags/*short,in*/, "
-                ":da /*char[100],in*/, :da_flags/*short,in*/, "
-                ":ref_num /*short,in*/, :total /*short,in*/, :part_num /*short,in*/, :serving_msc /*char[100],in*/)"
-                " into :res /*long,out*/",
-                *dbConnect);
-        dbStream
-               << static_cast<unsigned long long>(request->originationImsi)
-               << request->originationMsisdn
-               << static_cast<short>(request->originationFlags)
-               << request->destinationMsisdn
-               << static_cast<short>(request->destinationFlags)
-               << static_cast<short>(request->referenceNum)
-               << static_cast<short>(request->totalParts)
-               << static_cast<short>(request->partNum)
-               << request->servingMSC;
-        long result;
-        unsigned long long imsiOutOfProc;
-        dbStream >> imsiOutOfProc >> result;
-        request->resultCode = result;
-        request->originationImsi = imsiOutOfProc;
+        request->Process(dbConnect);
         std::stringstream ss;
         ss << "Request #" << request->requestNum << " processed by thread #" << index
            << " in " << round(duration<double>(system_clock::now() - request->accepted).count() * 1000)  << " ms."
-           << " Result: " << result;
+           << " Result: " << request->resultCode;
         logWriter << ss.str();
     }
     catch(const otl_exception& ex) {
@@ -133,7 +110,7 @@ void ConnectionPool::ProcessRequest(unsigned int index, ClientRequest* request, 
     }
 }
 
-ClientRequest* ConnectionPool::PopProcessedRequest()
+ClientRequest *ConnectionPool::PopProcessedRequest()
 {
     ClientRequest* request;
     if (processedRequests.pop(request)) {
