@@ -4,6 +4,7 @@
 #include "LogWriterOtl.h"
 #include "ClientRequest.h"
 #include "SmsRequest.h"
+#include "CamelRequest.h"
 
 extern LogWriterOtl logWriter;
 
@@ -166,6 +167,9 @@ int Server::ProcessNextRequestFromBuffer(const char* buffer, int maxLen, sockadd
         clientRequest = new SmsRequest(senderAddr);
         break;
     case QUOTA_REQ:
+        clientRequest = new CamelRequest(senderAddr);
+        break;
+    case CALL_FINISH_INFO:
         // TODO:
         break;
     }

@@ -105,7 +105,7 @@ int ConnectToVLRService(const char* ipAddress, int port)
 }
 
 
-bool ComposeAndSendRequest(uint64_t origImsi, std::string origMsisdn, unsigned long requestNum, int socket,
+bool ComposeAndSendRequest(uint16_t requestType, uint64_t origImsi, std::string origMsisdn, unsigned long requestNum, int socket,
                            sockaddr_in serverAddr)
 {
     CPSPacket psPacket;
@@ -114,42 +114,68 @@ bool ComposeAndSendRequest(uint64_t origImsi, std::string origMsisdn, unsigned l
 
 	unsigned char buffer[1024];
 
-    if(psPacket.Init((SPSRequest*)buffer, sizeof(buffer), requestNum, VALIDATEEX_REQ)) {
+    if(psPacket.Init((SPSRequest*)buffer, sizeof(buffer), requestNum, requestType)) {
         printf("SPSRequest.Init failed, buffer too small" );
         return false;
     }
+    int len = 0;
+    if (requestType == VALIDATEEX_REQ) {
+        if (origImsi != 0) {
+            uint64_t imsiNO = htonll(origImsi);
+            psPacket.AddAttr((SPSRequest*)buffer, sizeof(buffer), VLD_IMSI,
+                (const void*)&imsiNO, sizeof(imsiNO));
+        }
 
-    if (origImsi != 0) {
-        uint64_t imsiNO = htonll(origImsi);
-        psPacket.AddAttr((SPSRequest*)buffer, sizeof(buffer), VLD_IMSI,
-            (const void*)&imsiNO, sizeof(imsiNO));
+        if (!origMsisdn.empty()) {
+            psPacket.AddAttr((SPSRequest*)buffer, sizeof(buffer), VLD_OA,
+                (const void*)origMsisdn.data(), origMsisdn.size());
+        }
+
+        psPacket.AddAttr((SPSRequest*)buffer, sizeof(buffer), VLD_DA,
+            (const void*)destination.data(), destination.size());
+        uint8_t oaflags = 145;
+        uint8_t daflags = 145;
+        psPacket.AddAttr((SPSRequest*)buffer, sizeof(buffer), VLD_OAFLAGS,
+            (const void*)&oaflags, sizeof(oaflags));
+        psPacket.AddAttr((SPSRequest*)buffer, sizeof(buffer), VLD_DAFLAGS,
+            (const void*)&daflags, sizeof(daflags));
+        uint16_t referenceNum = 1000;
+        uint16_t referenceNumNO = htons(referenceNum);
+        psPacket.AddAttr((SPSRequest*)buffer, sizeof(buffer), VLD_REFNUM,
+            (const void*)&referenceNumNO, sizeof(referenceNumNO));
+        uint8_t totalParts = 3;
+        uint8_t partNum = 1;
+        psPacket.AddAttr((SPSRequest*)buffer, sizeof(buffer), VLD_TOTAL,
+            (const void*)&totalParts, sizeof(totalParts));
+        psPacket.AddAttr((SPSRequest*)buffer, sizeof(buffer), VLD_PART,
+            (const void*)&partNum, sizeof(partNum));
+        len = psPacket.AddAttr((SPSRequest*)buffer, sizeof(buffer), VLD_SERVINGMSC,
+            (const void*)servingMSC.data(), servingMSC.size());
     }
+    else if (requestType == QUOTA_REQ) {
+        uint64_t imsiNO = htonll(origImsi);
+        psPacket.AddAttr((SPSRequest*)buffer, sizeof(buffer), CAMEL_IMSI,
+            (const void*)&imsiNO, sizeof(imsiNO));
+        if (!origMsisdn.empty()) {
+            uint64_t callingNO = htonll(strtoull(origMsisdn.c_str(), nullptr, 10));
+            psPacket.AddAttr((SPSRequest*)buffer, sizeof(buffer), CAMEL_CALLING_PARTY,
+                (const void*)&callingNO, sizeof(callingNO));
+        }
 
-    if (!origMsisdn.empty()) {
-        psPacket.AddAttr((SPSRequest*)buffer, sizeof(buffer), VLD_OA,
-            (const void*)origMsisdn.data(), origMsisdn.size());
-	}
+        uint64_t calledNO = htonll(strtoull(destination.c_str(), nullptr, 10));
+        psPacket.AddAttr((SPSRequest*)buffer, sizeof(buffer), CAMEL_CALLED_PARTY,
+            (const void*)&calledNO, sizeof(calledNO));
+        uint64_t callRefNum = htonll(123000123);
+        psPacket.AddAttr((SPSRequest*)buffer, sizeof(buffer), CAMEL_CALL_REF_NUM,
+            (const void*)&callRefNum, sizeof(callRefNum));
+        uint8_t eventType = 12;
+        psPacket.AddAttr((SPSRequest*)buffer, sizeof(buffer), CAMEL_EVENT_TYPE,
+            (const void*)&eventType, sizeof(eventType));
+        uint8_t serviceKey = 2;
+        len = psPacket.AddAttr((SPSRequest*)buffer, sizeof(buffer), CAMEL_SERVICE_KEY,
+            (const void*)&serviceKey, sizeof(serviceKey));
 
-    psPacket.AddAttr((SPSRequest*)buffer, sizeof(buffer), VLD_DA,
-        (const void*)destination.data(), destination.size());
-    uint8_t oaflags = 145;
-    uint8_t daflags = 145;
-    psPacket.AddAttr((SPSRequest*)buffer, sizeof(buffer), VLD_OAFLAGS,
-        (const void*)&oaflags, sizeof(oaflags));
-    psPacket.AddAttr((SPSRequest*)buffer, sizeof(buffer), VLD_DAFLAGS,
-        (const void*)&daflags, sizeof(daflags));
-    uint16_t referenceNum = 1000;
-    uint16_t referenceNumNO = htons(referenceNum);
-    psPacket.AddAttr((SPSRequest*)buffer, sizeof(buffer), VLD_REFNUM,
-        (const void*)&referenceNumNO, sizeof(referenceNumNO));
-    uint8_t totalParts = 3;
-    uint8_t partNum = 1;
-    psPacket.AddAttr((SPSRequest*)buffer, sizeof(buffer), VLD_TOTAL,
-        (const void*)&totalParts, sizeof(totalParts));
-    psPacket.AddAttr((SPSRequest*)buffer, sizeof(buffer), VLD_PART,
-        (const void*)&partNum, sizeof(partNum));
-    int len = psPacket.AddAttr((SPSRequest*)buffer, sizeof(buffer), VLD_SERVINGMSC,
-        (const void*)servingMSC.data(), servingMSC.size());
+    }
     std::cout << "Sending request #" << requestNum << "(" << len << " bytes)" << std::endl;
 
     int serverLen = sizeof(serverAddr)  ;
@@ -188,15 +214,30 @@ int ParseNextResponseFromBuffer(unsigned char* buffer, int dataLen)
     mmRequest.clear();
     int parseRes = spPacket.Parse(pspRequest, dataLen, requestNum, requestType, packetLen, mmRequest, VALIDATE_PACKET);
      if (parseRes == PARSE_SUCCESS) {
-        if (requestType == VALIDATEEX_RESP) {
-            std::cout << "VALIDATEEX_RESP, requestType: 0x" << std::hex << requestType << std::dec
+        if (requestType == VALIDATEEX_RESP || requestType == QUOTA_RESP) {
+            if (requestType == VALIDATEEX_RESP) {
+                std::cout << "VALIDATEEX_RESP";
+            }
+            else {
+                std::cout << "QUOTA_RESP";
+            }
+
+            std::cout << ", requestType: 0x" << std::hex << requestType << std::dec
 				<<", requestNum: " << requestNum << std::endl;
             for(auto it = mmRequest.begin(); it != mmRequest.end(); it++) {
                 size_t dataLen = it->second.m_usDataLen;
                 std::cout << "AttrID: " << std::hex << it->second.m_usAttrType
                           << ", len: " << std::dec << dataLen << std::endl;
 				if (it->second.m_usAttrType == PS_RESULT) {
-                    int32_t resultCode = ntohl(*reinterpret_cast<int32_t*>(it->second.m_pvData));
+                    int32_t resultCode;
+                    if (requestType == VALIDATEEX_RESP) {
+                        // 4-byte result
+                        resultCode = ntohl(*reinterpret_cast<int32_t*>(it->second.m_pvData));
+                    }
+                    else {
+                        // 1-byte result
+                        resultCode = *reinterpret_cast<int8_t*>(it->second.m_pvData);
+                    }
                     std::cout << "PS_RESULT: " << std::to_string(resultCode) << std::endl;
 				}
 				else if (it->second.m_usAttrType == PS_DESCR) {
@@ -205,6 +246,14 @@ int ParseNextResponseFromBuffer(unsigned char* buffer, int dataLen)
 					descr[it->second.m_usDataLen] = '\0';
                     std::cout << "PS_DESCR: " << descr << std::endl;
 				}
+                else if (it->second.m_usAttrType == CAMEL_QUOTA_RESULT) {
+                    std::cout << "QUOTA_RESULT: " <<
+                          std::to_string(*reinterpret_cast<int8_t*>(it->second.m_pvData)) << std::endl;
+                }
+                else if (it->second.m_usAttrType == CAMEL_QUOTA_SECONDS) {
+                    long secs = ntohl(*reinterpret_cast<int32_t*>(it->second.m_pvData));
+                    std::cout << "QUOTA_SECONDS: " << secs << std::endl;
+                }
 				else {
 					unsigned char* data = static_cast<unsigned char*>(it->second.m_pvData);
 					std::cout << "Data: ";
@@ -263,13 +312,15 @@ int main(int argc, char* argv[])
     serv_addr.sin_addr.s_addr = inet_addr(argv[1]);
     serv_addr.sin_port = htons(port);
 
-    std::cout << "Choose option: \n\t1 - single request, "
+    std::cout << "Choose option: \n\nSMS validation requests:\n\t1 - single request, "
                  "\n\t2 - request with no origination IMSI"
                  "\n\t4 - missing origination MSISDN in request (ERROR), "
         "\n\t6 -300 requests with 30 ms delay"
         "\n\t7 -500 requests with 5 ms delay"
         "\n\t8 -100 requests with 500 ms delay"
-        "\n\tq - quit \n\t"
+	"\n\nCAMEL requests:"
+	"\n\ta -single quota request"
+        "\n\n\tq - quit \n\t"
         "any other letter - read socket data:\n";
 
 	while (true) {
@@ -303,6 +354,8 @@ int main(int argc, char* argv[])
             std::cout << "Entered option: " << cmd << std::endl;
             std::string origMsisdn = "79047186560";
             uint64_t origImsi = 250270100370021;
+            uint16_t requestType = VALIDATEEX_REQ;
+
             int requestsCount = 1;
             int delay = 0;
             if (cmd == "1") {
@@ -326,6 +379,9 @@ int main(int argc, char* argv[])
                 requestsCount = 100;
                 delay = 500000;
             }
+            else if (cmd == "a") {
+                requestType = QUOTA_REQ;
+            }
             else if (cmd == "q" || cmd == "Q") {
                 std::cout << "Exit option entered, goodbye!" << std::endl;
                 break;
@@ -335,7 +391,7 @@ int main(int argc, char* argv[])
 			}
 
 			for (int i = 0; i < requestsCount; i++) {
-                ComposeAndSendRequest(origImsi, origMsisdn, requestNum++, sock, serv_addr);
+                ComposeAndSendRequest(requestType, origImsi, origMsisdn, requestNum++, sock, serv_addr);
                 usleep(delay);
 			}
 		}

@@ -68,18 +68,6 @@
 #define HLR_PROMPT					"\x03<"
 #define TERMINAL_TYPE				"vt100"
 
-const int mainThreadIndex = -1;
-const std::string crlf = "\n";
-
-#if defined(_WIN32) || defined(_WIN64) 
-	#define vsnprintf _vsnprintf 
-	#define strcasecmp _stricmp 
-	#define strncasecmp _strnicmp 
-	#define localtime_r(time_t, tm) localtime_s(tm, time_t)
-	#define snprintf sprintf_s
-#endif
-
-typedef std::multimap<__uint16_t, SPSReqAttrParsed> psAttrMap;
 
 enum {
     VLD_OA = 0x1003,
@@ -93,10 +81,37 @@ enum {
     VLD_IMSI
 };
 
+enum {
+    CAMEL_IMSI = 0x0001,
+    CAMEL_CALLING_PARTY = 0x0002,
+    CAMEL_CALLED_PARTY = 0x0003,
+    CAMEL_CALL_REF_NUM = 0x0004,
+    CAMEL_EVENT_TYPE = 0x0005,
+    CAMEL_SERVICE_KEY = 0x0006,
+    CAMEL_SUCCESS_CODE = 0x0000,
+    CAMEL_ERROR_DESCR = 0x0001,
+    CAMEL_QUOTA_RESULT = 0x0002,
+    CAMEL_QUOTA_SECONDS = 0x0003
+};
+
+
+const int mainThreadIndex = -1;
+const std::string crlf = "\n";
+
+#if defined(_WIN32) || defined(_WIN64) 
+	#define vsnprintf _vsnprintf 
+	#define strcasecmp _stricmp 
+	#define strncasecmp _strnicmp 
+	#define localtime_r(time_t, tm) localtime_s(tm, time_t)
+	#define snprintf sprintf_s
+#endif
+
+typedef std::multimap<__uint16_t, SPSReqAttrParsed> psAttrMap;
+
 static const uint16_t VALIDATEEX_REQ = 0x1100;
 static const uint16_t VALIDATEEX_RESP = 0x1101;
 static const uint16_t ARE_Y_ALIVE = 0x0004;
 static const uint16_t I_AM_ALIVE = 0x0005;
 static const uint16_t QUOTA_REQ = 0x1200;
 static const uint16_t QUOTA_RESP = 0x1201;
-
+static const uint16_t CALL_FINISH_INFO = 0x1202;
