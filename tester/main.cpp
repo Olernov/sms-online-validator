@@ -152,7 +152,7 @@ bool ComposeAndSendRequest(uint16_t requestType, uint64_t origImsi, std::string 
         len = psPacket.AddAttr((SPSRequest*)buffer, sizeof(buffer), VLD_SERVINGMSC,
             (const void*)servingMSC.data(), servingMSC.size());
     }
-    else if (requestType == QUOTA_REQ) {
+    else if (requestType == QUOTA_REQ || requestType == CALL_FINISH_INFO) {
         uint64_t imsiNO = htonll(origImsi);
         psPacket.AddAttr((SPSRequest*)buffer, sizeof(buffer), CAMEL_IMSI,
             (const void*)&imsiNO, sizeof(imsiNO));
@@ -174,6 +174,11 @@ bool ComposeAndSendRequest(uint16_t requestType, uint64_t origImsi, std::string 
         uint8_t serviceKey = 2;
         len = psPacket.AddAttr((SPSRequest*)buffer, sizeof(buffer), CAMEL_SERVICE_KEY,
             (const void*)&serviceKey, sizeof(serviceKey));
+        if (requestType == CALL_FINISH_INFO) {
+            uint32_t totalDurNO = htonl(634);
+            len = psPacket.AddAttr((SPSRequest*)buffer, sizeof(buffer), CAMEL_TOTAL_DURATION,
+                (const void*)&totalDurNO, sizeof(totalDurNO));
+        }
 
     }
     std::cout << "Sending request #" << requestNum << "(" << len << " bytes)" << std::endl;
@@ -319,9 +324,11 @@ int main(int argc, char* argv[])
         "\n\t7 -500 requests with 5 ms delay"
         "\n\t8 -100 requests with 500 ms delay"
 	"\n\nCAMEL requests:"
-	"\n\ta -single quota request"
-        "\n\n\tq - quit \n\t"
-        "any other letter - read socket data:\n";
+    "\n\ta - single quota request"
+    "\n\tb - quota request for 250276666666666"
+    "\n\tf - call finish info"
+    "\n\n\tq - quit \n\t"
+    "any other letter - read socket data:\n";
 
 	while (true) {
         sockaddr_in senderAddr;
@@ -381,6 +388,13 @@ int main(int argc, char* argv[])
             }
             else if (cmd == "a") {
                 requestType = QUOTA_REQ;
+            }
+            else if (cmd == "b") {
+                requestType = QUOTA_REQ;
+                origImsi = 250276666666666;
+            }
+            else if (cmd == "f") {
+                requestType = CALL_FINISH_INFO;
             }
             else if (cmd == "q" || cmd == "Q") {
                 std::cout << "Exit option entered, goodbye!" << std::endl;

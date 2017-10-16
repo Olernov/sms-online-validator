@@ -25,7 +25,7 @@ public:
     virtual bool SendResultToClient(int socket, std::string& errorDescr) = 0;
     virtual void LogToKafka(RdKafka::Producer* producer, const std::string& topic,
                             bool responseSendSuccess) = 0;
-    std::string DumpResults();
+    virtual void DumpResults();
 
     static const int32_t resultCodeUnknown = -12;
     static const int8_t resultCodeDbException = -100;
@@ -58,8 +58,9 @@ public:
         case 2:
             value = ntohs(*static_cast<uint16_t*>(iter->second.m_pvData));
             break;
-        // TODO: parse other lengths
-
+        case 4:
+            value = ntohl(*static_cast<uint32_t*>(iter->second.m_pvData));
+            break;
         case 8:
             value = ntohll(*static_cast<uint64_t*>(iter->second.m_pvData));
             break;

@@ -5,6 +5,7 @@
 #include "ClientRequest.h"
 #include "SmsRequest.h"
 #include "CamelRequest.h"
+#include "CallFinishRequest.h"
 
 extern LogWriterOtl logWriter;
 
@@ -147,7 +148,8 @@ int Server::ProcessNextRequestFromBuffer(const char* buffer, int maxLen, sockadd
 	}
     logWriter.Write("request length: " + std::to_string(packetLen), mainThreadIndex, debug);
 	std::string errorDescr;
-    if(requestType != VALIDATEEX_REQ && requestType != ARE_Y_ALIVE && requestType != QUOTA_REQ) {
+    if(requestType != VALIDATEEX_REQ && requestType != ARE_Y_ALIVE && requestType != QUOTA_REQ
+            && requestType != CALL_FINISH_INFO) {
 		errorDescr = "Unsupported request type " + std::to_string(requestType);
         logWriter.Write(errorDescr, mainThreadIndex, error);
         SendNotAcceptedResponse(senderAddr, requestNum, errorDescr);
@@ -170,7 +172,7 @@ int Server::ProcessNextRequestFromBuffer(const char* buffer, int maxLen, sockadd
         clientRequest = new CamelRequest(senderAddr);
         break;
     case CALL_FINISH_INFO:
-        // TODO:
+        clientRequest = new CallFinishRequest(senderAddr);
         break;
     }
 
@@ -310,3 +312,4 @@ void Server::WaitForKafkaQueue()
         kafkaProducer->poll(producerPollTimeoutMs);
     }
 }
+

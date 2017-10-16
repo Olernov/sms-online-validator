@@ -25,13 +25,13 @@ bool ClientRequest::SetStringParam(const psAttrMap &requestAttrs, int paramType,
 }
 
 
-std::string ClientRequest::DumpResults()
+void ClientRequest::DumpResults()
 {
     std::stringstream ss;
     ss << "Request #" + std::to_string(requestNum) + " result code: " << std::to_string(resultCode);
     if (resultCode != OPERATION_SUCCESS) {
         ss << " (" << resultDescr << ")";
     }
-    return ss.str();
+    logWriter.Write(ss.str(), mainThreadIndex, debug);
 }
 

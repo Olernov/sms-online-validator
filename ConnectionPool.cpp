@@ -97,9 +97,10 @@ void ConnectionPool::ProcessRequest(unsigned int index, ClientRequest *request, 
         request->Process(dbConnect);
         std::stringstream ss;
         ss << "Request #" << request->requestNum << " processed by thread #" << index
-           << " in " << round(duration<double>(system_clock::now() - request->accepted).count() * 1000)  << " ms."
-           << " Result: " << request->resultCode;
+           << " in " << round(duration<double>(system_clock::now() - request->accepted).count() * 1000)
+           << " ms. ";
         logWriter << ss.str();
+        request->DumpResults();
     }
     catch(const otl_exception& ex) {
         request->resultDescr = "**** DB ERROR ****" + crlf + OTL_Utils::OtlExceptionToText(ex);

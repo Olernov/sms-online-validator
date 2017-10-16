@@ -97,10 +97,29 @@ bool CamelRequest::SendResultToClient(int socket, std::string& errorDescr)
 }
 
 
+
+void CamelRequest::DumpResults()
+{
+    std::stringstream ss;
+    ss << "Request #" + std::to_string(requestNum) + " result code: "
+       << std::to_string(resultCode);
+    if (resultCode != OPERATION_SUCCESS) {
+        ss << " (" << resultDescr << ")";
+    }
+    else {
+        ss << ", quotaResult: " << std::to_string(quotaResult);
+        ss << ", quotaSeconds: " << quotaSeconds;
+    }
+    logWriter.Write(ss.str(), mainThreadIndex, debug);
+}
+
 void CamelRequest::LogToKafka(RdKafka::Producer* producer, const std::string& topic,
                             bool responseSendSuccess)
 {
     CAMEL_Request req;
+
+   //   TODO: what to log ?
+
 //    req.originationImsi = originationImsi;
 //    req.originationMsisdn = originationMsisdn;
 //    req.destinationMsisdn = destinationMsisdn;
@@ -140,5 +159,6 @@ std::vector<uint8_t> CamelRequest::EncodeAvro(const CAMEL_Request &req)
     reader.readBytes(&rawData[0], out->byteCount());
     return rawData;
 }
+
 
 
