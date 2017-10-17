@@ -1,0 +1,13 @@
+{"namespace": "ru.tenet.databus.avro.schema.domain",
+ "type": "record",
+ "name": "Call_CDR",
+ "fields": [
+     {"name": "imsi", "type": "long"},
+     {"name": "callingPartyNumber", "type": "long"},
+     {"name": "calledPartyNumber", "type": "long"},
+     {"name": "startTime", "type": "long", "logicalType": "timestamp-millis"},
+     {"name": "finishTime", "type": "long", "logicalType": "timestamp-millis"}
+     {"name": "totalDurationSeconds", "type":  "int"},
+     {"name": "quotaResult", "type": "int"}
+  ]
+}

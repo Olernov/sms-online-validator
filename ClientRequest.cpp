@@ -1,10 +1,13 @@
 #include <sstream>
 #include "ClientRequest.h"
 
-ClientRequest::ClientRequest(sockaddr_in& senderAddr) :
+ClientRequest::ClientRequest(sockaddr_in& senderAddr, RdKafka::Producer* producer,
+                             const std::string& topic) :
+    clientAddr(senderAddr),
     accepted(system_clock::now()),
     resultCode(resultCodeUnknown),
-    clientAddr(senderAddr)
+    kafkaProducer(producer),
+    kafkaTopic(topic)
 {
 }
 

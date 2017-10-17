@@ -4,8 +4,9 @@
 #include "rdkafkacpp.h"
 
 
-CamelRequest::CamelRequest(sockaddr_in& senderAddr) :
-    ClientRequest(senderAddr)
+CamelRequest::CamelRequest(sockaddr_in& senderAddr, RdKafka::Producer* producer,
+                           const std::string& topic) :
+    ClientRequest(senderAddr, producer, topic)
 {}
 
 
@@ -97,7 +98,6 @@ bool CamelRequest::SendResultToClient(int socket, std::string& errorDescr)
 }
 
 
-
 void CamelRequest::DumpResults()
 {
     std::stringstream ss;
@@ -113,29 +113,27 @@ void CamelRequest::DumpResults()
     logWriter.Write(ss.str(), mainThreadIndex, debug);
 }
 
-void CamelRequest::LogToKafka(RdKafka::Producer* producer, const std::string& topic,
-                            bool responseSendSuccess)
+
+void CamelRequest::LogToKafka(bool responseSendSuccess)
 {
-    CAMEL_Request req;
+    if (resultCode != OPERATION_SUCCESS ||
+            quotaResult == allowCallAndRequestAgain || quotaResult == allowCallAndDropAfterQuota) {
+        // do not log such cases to Kafka
+        return;
+    }
+    // log only sucessful requests to database logic returning rejects for call establishing
+    Call_CDR cdr;
+    cdr.imsi = imsi;
+    cdr.callingPartyNumber = callingPartyNumber;
+    cdr.calledPartyNumber = calledPartyNumber;
+    cdr.startTime = system_clock::to_time_t(accepted) * 1000;
+    cdr.finishTime = system_clock::to_time_t(accepted) * 1000;
+    cdr.totalDurationSeconds = 0;
+    cdr.quotaResult = quotaResult;
 
-   //   TODO: what to log ?
-
-//    req.originationImsi = originationImsi;
-//    req.originationMsisdn = originationMsisdn;
-//    req.destinationMsisdn = destinationMsisdn;
-//    req.oaflags = originationFlags;
-//    req.daflags = destinationFlags;
-//    req.referenceNum = referenceNum;
-//    req.totalParts = totalParts;
-//    req.partNumber = partNum;
-//    req.servingMSC = servingMSC;
-//    req.validationTime = system_clock::to_time_t(accepted) * 1000;
-//    req.validationRes = resultCode;
-//    req.responseSendSuccess = responseSendSuccess;
-
-    std::vector<uint8_t> rawData = EncodeAvro(req);
+    std::vector<uint8_t> rawData = EncodeAvro(cdr);
     std::string errstr;
-    RdKafka::ErrorCode resp = producer->produce(topic, RdKafka::Topic::PARTITION_UA,
+    RdKafka::ErrorCode resp = kafkaProducer->produce(kafkaTopic, RdKafka::Topic::PARTITION_UA,
                                RdKafka::Producer::RK_MSG_COPY,
                                rawData.data(), rawData.size(), nullptr, 0,
                                time(nullptr) * 1000 /*milliseconds*/, nullptr);
@@ -146,7 +144,7 @@ void CamelRequest::LogToKafka(RdKafka::Producer* producer, const std::string& to
 }
 
 
-std::vector<uint8_t> CamelRequest::EncodeAvro(const CAMEL_Request &req)
+std::vector<uint8_t> CamelRequest::EncodeAvro(const Call_CDR &req)
 {
     std::unique_ptr<avro::OutputStream> out(avro::memoryOutputStream());
     avro::EncoderPtr encoder(avro::binaryEncoder());

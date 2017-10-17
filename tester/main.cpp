@@ -267,6 +267,9 @@ int ParseNextResponseFromBuffer(unsigned char* buffer, int dataLen)
 				}
             }
         }
+        else if (requestType == CALL_FINISH_ACK) {
+            std::cout << "CALL_FINISH_ACK for request #" << requestNum << std::endl;
+        }
         else {
             spPacket.Parse(pspRequest, 2048, szTextParse, 2048);
             printf("%s\n",szTextParse );

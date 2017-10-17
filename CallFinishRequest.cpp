@@ -2,10 +2,12 @@
 #include "CallFinishRequest.h"
 #include "Common.h"
 #include "rdkafkacpp.h"
+#include "otl_utils.h"
 
 
-CallFinishRequest::CallFinishRequest(sockaddr_in& senderAddr) :
-    ClientRequest(senderAddr)
+CallFinishRequest::CallFinishRequest(sockaddr_in& senderAddr, RdKafka::Producer *producer,
+                                     const std::string &topic) :
+    ClientRequest(senderAddr, producer, topic)
 {}
 
 
@@ -39,49 +41,51 @@ void CallFinishRequest::Process(DBConnect* dbConnect)
         "call M2M.CallFinishRequest(:imsi /*ubigint,in*/, "
         ":call_ref_num /*ubigint,in*/, :event_type /*short,in*/, :service_key /*short,in*/, "
         ":total_secs /*long,in*/, :start_time /*timestamp,out*/, :calling /*ubigint,out*/, "
-        ":called /*ubigint,out*/)", *dbConnect);
+        ":called /*ubigint,out*/, :quota_res /*long,out*/)", *dbConnect);
     dbStream
            << imsi
            << callReferenceNumber
            << static_cast<short>(eventType)
            << static_cast<short>(serviceKey)
            << totalDurationSeconds;
-    otl_datetime callStart;
-    unsigned long long callingParty, calledParty;
-    dbStream >> callStart >> callingParty >> calledParty;
+    otl_datetime callStartOtl;
+    dbStream >> callStartOtl >> callingPartyNumber >> calledPartyNumber >> lastQuotaRes;
+    callStartTime = OTL_Utils::OTL_datetime_to_Time_t(callStartOtl);
+    resultCode = OPERATION_SUCCESS;
 }
 
 
 bool CallFinishRequest::SendResultToClient(int socket, std::string& errorDescr)
 {
-    // no response is sent for this type of request
+    CPSPacket pspResponse;
+    char buffer[20];
+    if(pspResponse.Init(reinterpret_cast<SPSRequest*>(buffer), sizeof(buffer),
+                        requestNum, CALL_FINISH_ACK) != 0) {
+        errorDescr = "PSPacket init failed";
+        return false;
+    }
+    int len = sizeof(SPSRequest);
+    if(sendto(socket, buffer, len, 0, reinterpret_cast<sockaddr*>(&clientAddr), sizeof(clientAddr)) <= 0) {
+        errorDescr = "socket error " + std::to_string(errno);
+        return false;
+    }
     return true;
 }
 
 
-void CallFinishRequest::LogToKafka(RdKafka::Producer* producer, const std::string& topic,
-                            bool responseSendSuccess)
+void CallFinishRequest::LogToKafka(bool responseSendSuccess)
 {
-    CAMEL_Request req;
-
-   //   TODO: what to log ?
-
-//    req.originationImsi = originationImsi;
-//    req.originationMsisdn = originationMsisdn;
-//    req.destinationMsisdn = destinationMsisdn;
-//    req.oaflags = originationFlags;
-//    req.daflags = destinationFlags;
-//    req.referenceNum = referenceNum;
-//    req.totalParts = totalParts;
-//    req.partNumber = partNum;
-//    req.servingMSC = servingMSC;
-//    req.validationTime = system_clock::to_time_t(accepted) * 1000;
-//    req.validationRes = resultCode;
-//    req.responseSendSuccess = responseSendSuccess;
-
-    std::vector<uint8_t> rawData = EncodeAvro(req);
+    Call_CDR cdr;
+    cdr.imsi = imsi;
+    cdr.callingPartyNumber = callingPartyNumber;
+    cdr.calledPartyNumber = calledPartyNumber;
+    cdr.startTime = callStartTime * 1000;
+    cdr.finishTime = system_clock::to_time_t(accepted) * 1000;
+    cdr.totalDurationSeconds = totalDurationSeconds;
+    cdr.quotaResult = lastQuotaRes;
+    std::vector<uint8_t> rawData = EncodeAvro(cdr);
     std::string errstr;
-    RdKafka::ErrorCode resp = producer->produce(topic, RdKafka::Topic::PARTITION_UA,
+    RdKafka::ErrorCode resp = kafkaProducer->produce(kafkaTopic, RdKafka::Topic::PARTITION_UA,
                                RdKafka::Producer::RK_MSG_COPY,
                                rawData.data(), rawData.size(), nullptr, 0,
                                time(nullptr) * 1000 /*milliseconds*/, nullptr);
@@ -92,7 +96,7 @@ void CallFinishRequest::LogToKafka(RdKafka::Producer* producer, const std::strin
 }
 
 
-std::vector<uint8_t> CallFinishRequest::EncodeAvro(const CAMEL_Request &req)
+std::vector<uint8_t> CallFinishRequest::EncodeAvro(const Call_CDR &req)
 {
     std::unique_ptr<avro::OutputStream> out(avro::memoryOutputStream());
     avro::EncoderPtr encoder(avro::binaryEncoder());

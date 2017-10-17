@@ -116,3 +116,4 @@ static const uint16_t I_AM_ALIVE = 0x0005;
 static const uint16_t QUOTA_REQ = 0x1200;
 static const uint16_t QUOTA_RESP = 0x1201;
 static const uint16_t CALL_FINISH_INFO = 0x1202;
+static const uint16_t CALL_FINISH_ACK = 0x1203;

@@ -69,7 +69,8 @@ bool Server::Initialize(const Config& config,  ConnectionPool* cp, std::string& 
             errDescription = "Failed to create kafka producer: " + errstr;
             return false;
         }
-        kafkaTopic = config.kafkaTopic;
+        kafkaTopicSms = config.kafkaTopicSms;
+        kafkaTopicCalls = config.kafkaTopicCalls;
     }
     else {
         kafkaProducer = nullptr;
@@ -157,7 +158,7 @@ int Server::ProcessNextRequestFromBuffer(const char* buffer, int maxLen, sockadd
     }
 	if (requestType == ARE_Y_ALIVE) {
 		logWriter.Write("ARE_YOU_ALIVE_REQUEST received, sending I_AM_ALIVE response", mainThreadIndex, debug);
-		SendIAMAliveResponse(senderAddr, requestNum, errorDescr);
+        SendIAmAliveResponse(senderAddr, requestNum, errorDescr);
 		return packetLen;
 	}
 
@@ -166,13 +167,13 @@ int Server::ProcessNextRequestFromBuffer(const char* buffer, int maxLen, sockadd
     ClientRequest* clientRequest = nullptr;
     switch (requestType) {
     case VALIDATEEX_REQ:
-        clientRequest = new SmsRequest(senderAddr);
+        clientRequest = new SmsRequest(senderAddr, kafkaProducer.get(), kafkaTopicSms);
         break;
     case QUOTA_REQ:
-        clientRequest = new CamelRequest(senderAddr);
+        clientRequest = new CamelRequest(senderAddr, kafkaProducer.get(), kafkaTopicCalls);
         break;
     case CALL_FINISH_INFO:
-        clientRequest = new CallFinishRequest(senderAddr);
+        clientRequest = new CallFinishRequest(senderAddr, kafkaProducer.get(), kafkaTopicCalls);
         break;
     }
 
@@ -228,14 +229,14 @@ void Server::SendClientResponses()
         }
 
         if (kafkaProducer != nullptr) {
-            request->LogToKafka(kafkaProducer.get(), kafkaTopic, responseSendSuccess);
+            request->LogToKafka(responseSendSuccess);
         }
         delete request;
     }
 }
 
 
-bool Server::SendIAMAliveResponse(sockaddr_in& senderAddr, uint32_t requestNum,  std::string errDescr)
+bool Server::SendIAmAliveResponse(sockaddr_in& senderAddr, uint32_t requestNum,  std::string errDescr)
 {
 	CPSPacket pspResponse;
 	char buffer[2014];
@@ -250,6 +251,7 @@ bool Server::SendIAMAliveResponse(sockaddr_in& senderAddr, uint32_t requestNum, 
 	return true;
 }
 
+
 std::string Server::IPAddr2Text(const in_addr& inAddr)
 {
 	char buffer[64];
@@ -262,12 +264,12 @@ std::string Server::IPAddr2Text(const in_addr& inAddr)
 	return std::string(buffer);
 }
 
+
 void Server::Stop()
 {
     shutdownInProgress = true;
 
 }
-
 
 
 KafkaEventCallback::KafkaEventCallback() :
@@ -295,7 +297,6 @@ void KafkaEventCallback::event_cb (RdKafka::Event &event)
         break;
     }
 }
-
 
 
 void Server::WaitForKafkaQueue()

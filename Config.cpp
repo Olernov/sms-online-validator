@@ -4,7 +4,6 @@
 Config::Config() :
     serverPort(5300),
     connectionCount(2),
-    kafkaTopic("sms-events"),
     logLevel(notice)
 {
 }
@@ -77,8 +76,11 @@ void Config::ReadConfigFile(std::ifstream& configStream)
         else if (option_name == kafkaBrokerParamName) {
             kafkaBroker = option_value;
         }
-        else if (option_name == kafkaTopicParamName) {
-            kafkaTopic = option_value;
+        else if (option_name == kafkaTopicSmsParamName) {
+            kafkaTopicSms = option_value;
+        }
+        else if (option_name == kafkaTopicCallsParamName) {
+            kafkaTopicCalls = option_value;
         }
         else if (!option_name.empty()){
             throw std::runtime_error("Unknown parameter " + option_name + " found");
@@ -114,7 +116,8 @@ std::string Config::DumpAllSettings()
 		logDirParamName + ": " + logDir + crlf +
 		connectionCountParamName + ": " + std::to_string(connectionCount) + crlf +
         kafkaBrokerParamName + ": " + kafkaBroker + crlf +
-        kafkaTopicParamName + ": " + kafkaTopic + crlf +
+        kafkaTopicSmsParamName + ": " + kafkaTopicSms + crlf +
+        kafkaTopicCallsParamName + ": " + kafkaTopicCalls + crlf +
        logLevelParamName + ": " + (logLevel == error ? "error" : (logLevel == debug ? "debug" : "notice")) + crlf;
 }
 

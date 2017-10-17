@@ -22,7 +22,8 @@ public:
     unsigned short connectionCount;
     LogLevel logLevel;
     std::string kafkaBroker;
-    std::string kafkaTopic;
+    std::string kafkaTopicSms;
+    std::string kafkaTopicCalls;
     std::string kafkaTopicTest;
 private:
     const std::string logDirParamName = "LOG_DIR";
@@ -31,7 +32,8 @@ private:
     const std::string logLevelParamName = "LOG_LEVEL";
 	const std::string serverPortParamName = "SERVER_PORT";
     const std::string kafkaBrokerParamName = "KAFKA_BROKER";
-    const std::string kafkaTopicParamName = "KAFKA_TOPIC";
+    const std::string kafkaTopicSmsParamName = "KAFKA_TOPIC_SMS";
+    const std::string kafkaTopicCallsParamName = "KAFKA_TOPIC_CALLS";
     const int minConnCount = 1;
     const int maxConnCount = 16;
     unsigned long ParseULongValue(const std::string& name, const std::string& value);

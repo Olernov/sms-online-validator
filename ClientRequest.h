@@ -16,15 +16,14 @@ extern LogWriterOtl logWriter;
 class ClientRequest
 {
 public:
-    ClientRequest(sockaddr_in& senderAddr);
+    ClientRequest(sockaddr_in& senderAddr, RdKafka::Producer* producer, const std::string& topic);
     virtual ~ClientRequest() {};
 
     virtual bool ValidateAndSetParams(uint32_t reqNum, const psAttrMap &requestAttrs,
                                              std::string& errorDescr) = 0;
     virtual void Process(DBConnect* dbConnect) = 0;
     virtual bool SendResultToClient(int socket, std::string& errorDescr) = 0;
-    virtual void LogToKafka(RdKafka::Producer* producer, const std::string& topic,
-                            bool responseSendSuccess) = 0;
+    virtual void LogToKafka(bool responseSendSuccess) = 0;
     virtual void DumpResults();
 
     static const int32_t resultCodeUnknown = -12;
@@ -35,6 +34,9 @@ public:
     system_clock::time_point accepted;
     int8_t resultCode;
     std::string resultDescr;
+    RdKafka::Producer* kafkaProducer;
+    const std::string& kafkaTopic;
+
 
     template<typename T>
     bool SetRequiredIntParam(const psAttrMap& requestAttrs, int paramType, const std::string& paramName,

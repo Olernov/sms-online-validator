@@ -1,5 +1,5 @@
+#include <sstream>
 #include "otl_utils.h"
-#include "Common.h"
 
 otl_datetime OTL_Utils::Time_t_to_OTL_datetime(time_t timeT)
 {
@@ -19,8 +19,25 @@ otl_datetime OTL_Utils::Time_t_to_OTL_datetime(time_t timeT)
 
 std::string OTL_Utils::OtlExceptionToText(const otl_exception& otlEx)
 {
-    return std::string(reinterpret_cast<const char*>(otlEx.msg)) + crlf +
-        reinterpret_cast<const char*>(otlEx.stm_text)+ crlf +
-        reinterpret_cast<const char*>(otlEx.var_info);
+    std::stringstream ss;
+    ss << reinterpret_cast<const char*>(otlEx.msg) << std::endl
+        << reinterpret_cast<const char*>(otlEx.stm_text) << std::endl
+        << reinterpret_cast<const char*>(otlEx.var_info);
+    return ss.str();
+}
+
+time_t OTL_Utils::OTL_datetime_to_Time_t(const otl_datetime& t)
+{
+    tm result;
+    result.tm_year = t.year - 1900;
+    result.tm_mon = t.month - 1;
+    result.tm_mday = t.day;
+    result.tm_hour = t.hour;
+    result.tm_min = t.minute;
+    result.tm_sec = t.second;
+    result.tm_wday = 0; // not used
+    result.tm_yday = 0; // not used
+    result.tm_isdst = 0; //Daylight saving Time flag
+    return mktime(&result);
 }
 

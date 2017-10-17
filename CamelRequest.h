@@ -7,21 +7,24 @@
 #include "OTL_Header.h"
 #include "DBConnect.h"
 #include "ClientRequest.h"
-#include "camel-avro.hh"
+#include "camel-avro.h"
 
 
 class CamelRequest : public ClientRequest
 {
 public:
-    CamelRequest(sockaddr_in& senderAddr);
+    CamelRequest(sockaddr_in& senderAddr, RdKafka::Producer *producer, const std::string &topic);
     bool ValidateAndSetParams(uint32_t reqNum, const psAttrMap &requestAttrs,
             std::string& errorDescr);
     void Process(DBConnect* dbConnect);
     bool SendResultToClient(int socket, std::string& errorDescr);
-    void LogToKafka(RdKafka::Producer* producer, const std::string &topic,
-                    bool responseSendSuccess);
+    void LogToKafka(bool responseSendSuccess);
     void DumpResults();
 private:
+    enum {
+        allowCallAndRequestAgain = 0,
+        allowCallAndDropAfterQuota = 1
+    };
     unsigned long long imsi;
     unsigned long long callingPartyNumber;
     unsigned long long calledPartyNumber;
@@ -31,5 +34,5 @@ private:
     int8_t quotaResult;
     long quotaSeconds;
 
-    std::vector<uint8_t> EncodeAvro(const CAMEL_Request &avroCdr);
+    std::vector<uint8_t> EncodeAvro(const Call_CDR &avroCdr);
 };
