@@ -27,10 +27,12 @@ private:
     };
     unsigned long long imsi;
     unsigned long long callingPartyNumber;
+    short callingNatureOfAddress;
     unsigned long long calledPartyNumber;
+    short calledNatureOfAddress;
     unsigned long long callReferenceNumber;
-    uint8_t eventType;
-    uint8_t serviceKey;
+    short eventType;
+    short serviceKey;
     int8_t quotaResult;
     long quotaSeconds;
 

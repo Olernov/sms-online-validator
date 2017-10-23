@@ -160,11 +160,17 @@ bool ComposeAndSendRequest(uint16_t requestType, uint64_t origImsi, std::string 
             uint64_t callingNO = htonll(strtoull(origMsisdn.c_str(), nullptr, 10));
             psPacket.AddAttr((SPSRequest*)buffer, sizeof(buffer), CAMEL_CALLING_PARTY,
                 (const void*)&callingNO, sizeof(callingNO));
+            uint8_t callingNOA = 1;
+            psPacket.AddAttr((SPSRequest*)buffer, sizeof(buffer), CAMEL_CALLING_NOA,
+                (const void*)&callingNOA, sizeof(callingNOA));
         }
 
         uint64_t calledNO = htonll(strtoull(destination.c_str(), nullptr, 10));
         psPacket.AddAttr((SPSRequest*)buffer, sizeof(buffer), CAMEL_CALLED_PARTY,
             (const void*)&calledNO, sizeof(calledNO));
+        uint8_t calledNOA = 1;
+        psPacket.AddAttr((SPSRequest*)buffer, sizeof(buffer), CAMEL_CALLED_NOA,
+            (const void*)&calledNOA, sizeof(calledNOA));
         uint64_t callRefNum = htonll(123000123);
         psPacket.AddAttr((SPSRequest*)buffer, sizeof(buffer), CAMEL_CALL_REF_NUM,
             (const void*)&callRefNum, sizeof(callRefNum));

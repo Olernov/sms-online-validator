@@ -21,8 +21,16 @@ bool CamelRequest::ValidateAndSetParams(uint32_t reqNum, const psAttrMap& reques
                         callingPartyNumber, errorDescr)) {
         return false;
     }
+    if (!SetRequiredIntParam(requestAttrs, CAMEL_CALLING_NOA, "Calling Party Number Nature Of Address",
+                        callingNatureOfAddress, errorDescr)) {
+        return false;
+    }
     if (!SetRequiredIntParam(requestAttrs, CAMEL_CALLED_PARTY, "Called Party Number",
                         calledPartyNumber, errorDescr)) {
+        return false;
+    }
+    if (!SetRequiredIntParam(requestAttrs, CAMEL_CALLED_NOA, "Called Party Number Nature Of Address",
+                        calledNatureOfAddress, errorDescr)) {
         return false;
     }
     if (!SetRequiredIntParam(requestAttrs, CAMEL_CALL_REF_NUM, "Call Reference Number",
@@ -45,9 +53,9 @@ void CamelRequest::Process(DBConnect* dbConnect)
 {
     otl_stream dbStream;
     dbStream.open(1,
-        "call M2M.CallQuotaRequest(:imsi /*ubigint,in*/, :calling /*ubigint,in*/, :called /*ubigint,in*/, "
-        ":call_ref_num /*ubigint,in*/, :event_type /*short,in*/, :service_key /*short,in*/, "
-        ":quota_res /*short,out*/, :quota_sec /*long,out*/)"
+        "call M2M.CallQuotaRequest(:imsi /*ubigint,in*/, :calling /*ubigint,in*/,"
+        ":called /*ubigint,in*/, :call_ref_num /*ubigint,in*/, :event_type /*short,in*/, "
+        ":service_key /*short,in*/, :quota_res /*short,out*/, :quota_sec /*long,out*/)"
         " into :res /*short,out*/",
         *dbConnect);
     dbStream
@@ -55,8 +63,8 @@ void CamelRequest::Process(DBConnect* dbConnect)
            << callingPartyNumber
            << calledPartyNumber
            << callReferenceNumber
-           << static_cast<short>(eventType)
-           << static_cast<short>(serviceKey);
+           << eventType
+           << serviceKey;
     short successCode, res;
     dbStream >> res >> quotaSeconds >> successCode;
     resultCode = successCode;

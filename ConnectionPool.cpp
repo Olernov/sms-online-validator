@@ -94,8 +94,13 @@ void ConnectionPool::WorkerThread(unsigned int index, DBConnect* dbConnect)
 void ConnectionPool::ProcessRequest(unsigned int index, ClientRequest *request, DBConnect* dbConnect)
 {
     try {
-        request->Process(dbConnect);
         std::stringstream ss;
+        ss << "Started processing of request #" << request->requestNum << " by thread #" << index;
+        logWriter.Write(ss.str(), index, debug);
+
+        request->Process(dbConnect);
+
+        ss.str(std::string());
         ss << "Request #" << request->requestNum << " processed by thread #" << index
            << " in " << round(duration<double>(system_clock::now() - request->accepted).count() * 1000)
            << " ms. ";
