@@ -26,7 +26,7 @@ private:
     unsigned long long calledPartyNumber;
     uint8_t eventType;
     uint8_t serviceKey;
-    long totalDurationSeconds;
+    long totalDurationMilliseconds;
     time_t callStartTime;
     long lastQuotaRes;
 

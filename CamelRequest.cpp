@@ -66,7 +66,7 @@ void CamelRequest::Process(DBConnect* dbConnect)
            << eventType
            << serviceKey;
     short successCode, res;
-    dbStream >> res >> quotaSeconds >> successCode;
+    dbStream >> res >> quotaMilliseconds >> successCode;
     resultCode = successCode;
     quotaResult = res;
 }
@@ -87,10 +87,10 @@ bool CamelRequest::SendResultToClient(int socket, std::string& errorDescr)
     if (resultCode == OPERATION_SUCCESS) {
         len = pspResponse.AddAttr(reinterpret_cast<SPSRequest*>(buffer), sizeof(buffer),
             CAMEL_QUOTA_RESULT, &quotaResult, sizeof(quotaResult));
-        if (quotaSeconds > 0) {
-            uint32_t quotaSecondsNO = htonl(quotaSeconds);
+        if (quotaMilliseconds > 0) {
+            uint32_t quotaMillisecondsNO = htonl(quotaMilliseconds);
             len = pspResponse.AddAttr(reinterpret_cast<SPSRequest*>(buffer), sizeof(buffer),
-                CAMEL_QUOTA_SECONDS, &quotaSecondsNO, sizeof(quotaSecondsNO));
+                CAMEL_QUOTA_MILLISECONDS, &quotaMillisecondsNO, sizeof(quotaMillisecondsNO));
         }
     }
     else if(!resultDescr.empty()) {
@@ -109,14 +109,13 @@ bool CamelRequest::SendResultToClient(int socket, std::string& errorDescr)
 void CamelRequest::DumpResults()
 {
     std::stringstream ss;
-    ss << "Request #" + std::to_string(requestNum) + " result code: "
-       << std::to_string(resultCode);
+    ss << "Request #" << std::to_string(requestNum) << " result code: " << std::to_string(resultCode);
     if (resultCode != OPERATION_SUCCESS) {
         ss << " (" << resultDescr << ")";
     }
     else {
         ss << ", quotaResult: " << std::to_string(quotaResult);
-        ss << ", quotaSeconds: " << quotaSeconds;
+        ss << ", quotaMilliseconds: " << quotaMilliseconds;
     }
     logWriter.Write(ss.str(), mainThreadIndex, debug);
 }

@@ -162,8 +162,10 @@ int Server::ProcessNextRequestFromBuffer(const char* buffer, int maxLen, sockadd
 		return packetLen;
 	}
 
-    logWriter.Write("Request #" + std::to_string(requestNum) + " received from " + IPAddr2Text(senderAddr.sin_addr) 
-		+ ". Size: " + std::to_string(packetLen) + " bytes.", mainThreadIndex, notice);
+    logWriter.Write("Request #" + std::to_string(requestNum) +
+                    " received from " + IPAddr2Text(senderAddr.sin_addr) +
+                    ". Size: " + std::to_string(packetLen) + " bytes. Type: " +
+                    std::to_string(requestType), mainThreadIndex, notice);
     ClientRequest* clientRequest = nullptr;
     switch (requestType) {
     case VALIDATEEX_REQ:
