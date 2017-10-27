@@ -34,7 +34,7 @@ private:
     short eventType;
     short serviceKey;
     int8_t quotaResult;
-    long quotaMilliseconds;
+    long quotaChunks;
 
     std::vector<uint8_t> EncodeAvro(const Call_CDR &avroCdr);
 };

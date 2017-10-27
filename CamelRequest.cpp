@@ -55,7 +55,7 @@ void CamelRequest::Process(DBConnect* dbConnect)
     dbStream.open(1,
         "call M2M.CallQuotaRequest(:imsi /*ubigint,in*/, :calling /*ubigint,in*/,"
         ":called /*ubigint,in*/, :call_ref_num /*ubigint,in*/, :event_type /*short,in*/, "
-        ":service_key /*short,in*/, :quota_res /*short,out*/, :quota_sec /*long,out*/)"
+        ":service_key /*short,in*/, :quota_res /*short,out*/, :quota_chunks /*long,out*/)"
         " into :res /*short,out*/",
         *dbConnect);
     dbStream
@@ -66,7 +66,7 @@ void CamelRequest::Process(DBConnect* dbConnect)
            << eventType
            << serviceKey;
     short successCode, res;
-    dbStream >> res >> quotaMilliseconds >> successCode;
+    dbStream >> res >> quotaChunks >> successCode;
     resultCode = successCode;
     quotaResult = res;
 }
@@ -87,10 +87,10 @@ bool CamelRequest::SendResultToClient(int socket, std::string& errorDescr)
     if (resultCode == OPERATION_SUCCESS) {
         len = pspResponse.AddAttr(reinterpret_cast<SPSRequest*>(buffer), sizeof(buffer),
             CAMEL_QUOTA_RESULT, &quotaResult, sizeof(quotaResult));
-        if (quotaMilliseconds > 0) {
-            uint32_t quotaMillisecondsNO = htonl(quotaMilliseconds);
+        if (quotaChunks > 0) {
+            uint32_t quotaChunksNO = htonl(quotaChunks);
             len = pspResponse.AddAttr(reinterpret_cast<SPSRequest*>(buffer), sizeof(buffer),
-                CAMEL_QUOTA_MILLISECONDS, &quotaMillisecondsNO, sizeof(quotaMillisecondsNO));
+                CAMEL_QUOTA_CHUNKS, &quotaChunksNO, sizeof(quotaChunksNO));
         }
     }
     else if(!resultDescr.empty()) {
@@ -115,7 +115,7 @@ void CamelRequest::DumpResults()
     }
     else {
         ss << ", quotaResult: " << std::to_string(quotaResult);
-        ss << ", quotaMilliseconds: " << quotaMilliseconds;
+        ss << ", quotaChunks: " << quotaChunks;
     }
     logWriter.Write(ss.str(), mainThreadIndex, debug);
 }

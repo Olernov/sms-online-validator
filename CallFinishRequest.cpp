@@ -26,8 +26,8 @@ bool CallFinishRequest::ValidateAndSetParams(uint32_t reqNum, const psAttrMap& r
                              eventType, errorDescr)) {
         return false;
     }
-    if (!SetRequiredIntParam(requestAttrs, CAMEL_TOTAL_DURATION, "Total duration (milliseconds)",
-                             totalDurationMilliseconds, errorDescr)) {
+    if (!SetRequiredIntParam(requestAttrs, CAMEL_TOTAL_DURATION, "Total duration (chunks)",
+                             totalDurationChunks, errorDescr)) {
         return false;
     }
     return true;
@@ -47,7 +47,7 @@ void CallFinishRequest::Process(DBConnect* dbConnect)
            << callReferenceNumber
            << static_cast<short>(eventType)
            << static_cast<short>(serviceKey)
-           << totalDurationMilliseconds;
+           << totalDurationChunks;
     otl_datetime callStartOtl;
     dbStream >> callStartOtl >> callingPartyNumber >> calledPartyNumber >> lastQuotaRes;
     callStartTime = OTL_Utils::OTL_datetime_to_Time_t(callStartOtl);
@@ -81,7 +81,7 @@ void CallFinishRequest::LogToKafka(bool responseSendSuccess)
     cdr.calledPartyNumber = calledPartyNumber;
     cdr.startTime = callStartTime * 1000;
     cdr.finishTime = system_clock::to_time_t(accepted) * 1000;
-    cdr.totalDurationSeconds = totalDurationMilliseconds;
+    cdr.totalDurationSeconds = totalDurationChunks;
     cdr.quotaResult = lastQuotaRes;
     std::vector<uint8_t> rawData = EncodeAvro(cdr);
     std::string errstr;

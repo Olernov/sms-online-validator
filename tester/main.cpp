@@ -181,7 +181,7 @@ bool ComposeAndSendRequest(uint16_t requestType, uint64_t origImsi, std::string 
         len = psPacket.AddAttr((SPSRequest*)buffer, sizeof(buffer), CAMEL_SERVICE_KEY,
             (const void*)&serviceKey, sizeof(serviceKey));
         if (requestType == CALL_FINISH_INFO) {
-            uint32_t totalDurNO = htonl(634000);
+            uint32_t totalDurNO = htonl(6340);
             len = psPacket.AddAttr((SPSRequest*)buffer, sizeof(buffer), CAMEL_TOTAL_DURATION,
                 (const void*)&totalDurNO, sizeof(totalDurNO));
         }
@@ -261,9 +261,9 @@ int ParseNextResponseFromBuffer(unsigned char* buffer, int dataLen)
                     std::cout << "QUOTA_RESULT: " <<
                           std::to_string(*reinterpret_cast<int8_t*>(it->second.m_pvData)) << std::endl;
                 }
-                else if (it->second.m_usAttrType == CAMEL_QUOTA_MILLISECONDS) {
-                    long millisecs = ntohl(*reinterpret_cast<int32_t*>(it->second.m_pvData));
-                    std::cout << "QUOTA_MILLISECONDS: " << millisecs << std::endl;
+                else if (it->second.m_usAttrType == CAMEL_QUOTA_CHUNKS) {
+                    long chunks = ntohl(*reinterpret_cast<int32_t*>(it->second.m_pvData));
+                    std::cout << "QUOTA_CHUNKS: " << chunks << std::endl;
                 }
 				else {
 					unsigned char* data = static_cast<unsigned char*>(it->second.m_pvData);
