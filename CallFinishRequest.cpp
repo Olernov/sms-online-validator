@@ -81,7 +81,7 @@ void CallFinishRequest::LogToKafka(bool responseSendSuccess)
     cdr.calledPartyNumber = calledPartyNumber;
     cdr.startTime = callStartTime * 1000;
     cdr.finishTime = system_clock::to_time_t(accepted) * 1000;
-    cdr.totalDurationSeconds = totalDurationChunks;
+    cdr.totalDurationSeconds = totalDurationChunks/10;
     cdr.quotaResult = lastQuotaRes;
     std::vector<uint8_t> rawData = EncodeAvro(cdr);
     std::string errstr;
