@@ -105,7 +105,6 @@ int main(int argc, char* argv[])
         else {
             server.Run();
         }
-
     }
     catch (const std::exception& ex) {
         std::cerr << ex.what() <<  ". Exiting." <<std::endl;

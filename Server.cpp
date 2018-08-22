@@ -38,11 +38,18 @@ bool Server::Initialize(const Config& config,  ConnectionPool* cp, std::string& 
 	}
 #ifndef _WIN32
     int optval = 1;
-    setsockopt(udpSocket, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
+    if (setsockopt(udpSocket, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) != 0) {
+        errDescription = "setsockopt failed when setting SO_REUSEADDR. Error #" + std::to_string(errno);
+        return false;
+    }
     struct timeval tv;
     tv.tv_sec = 0;
-    tv.tv_usec = 1000;
-    setsockopt(udpSocket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    tv.tv_usec = 1; // time-out in milliseconds. "struct timeval" doc says it's microseconds but MSDN says it's milliseconds
+                    // and actually it's milliseconds.
+    if (setsockopt(udpSocket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) != 0) {
+        errDescription = "setsockopt failed when setting SO_RCVTIMEO. Error #" + std::to_string(errno);
+        return false;
+    }
 #endif
 	struct sockaddr_in serverAddr;
 	memset((char *) &serverAddr, 0, sizeof(serverAddr));
@@ -90,7 +97,10 @@ Server::~Server()
 void Server::Run()
 {
 	while (!shutdownInProgress) {
+        logWriter.Write("Entering SendClientResponses... ", mainThreadIndex, debug);
         SendClientResponses();
+        logWriter.Write("Returned from SendClientResponses.", mainThreadIndex, debug);
+
         char receiveBuffer[65000];
         sockaddr_in senderAddr;
 #ifndef _WIN32
@@ -98,8 +108,13 @@ void Server::Run()
 #else
 		int senderAddrSize = sizeof(senderAddr);
 #endif
+        logWriter.Write("Entering recvfrom... ", mainThreadIndex, debug);
+        auto start = std::chrono::system_clock::now();
         int recvBytes = recvfrom(udpSocket, receiveBuffer, sizeof(receiveBuffer), 0,
                                  reinterpret_cast<sockaddr*>(&senderAddr), &senderAddrSize);
+        auto finish = std::chrono::system_clock::now();
+        logWriter.Write("Returned from recvfrom. Elapsed time: " + std::to_string((finish - start).count()) + " ms.",
+                        mainThreadIndex, debug);
         if (recvBytes > 0) {
             logWriter.Write(std::to_string(recvBytes) + " bytes received from " + IPAddr2Text(senderAddr.sin_addr), 
 				mainThreadIndex, debug);
