@@ -13,13 +13,15 @@ class ConnectionPool
 public:
     ConnectionPool();
     ~ConnectionPool();
-    bool Initialize(const Config& config, std::string& errDescription);
+    bool Initialize(const Config& config, int socket, RdKafka::Producer* kafkaProd,
+                    std::string& errDescription);
     void PushRequest(ClientRequest *clientRequest);
-    ClientRequest* PopProcessedRequest();
+    //ClientRequest* PopProcessedRequest();
 private:
     static const int queueSize = 1024;
     static const int maxRequestAgeSec = 3.0;
     std::string connectString;
+    int udpSocket;
     bool initialized;
     bool stopFlag;
     std::vector<DBConnect*> dbConnectPool;
@@ -27,9 +29,12 @@ private:
     std::condition_variable conditionVar;
     std::mutex lock;
     boost::lockfree::queue<ClientRequest*> incomingRequests;
-    boost::lockfree::queue<ClientRequest*> processedRequests;
+    //boost::lockfree::queue<ClientRequest*> processedRequests;
+    std::mutex socketMutex;
+    RdKafka::Producer* kafkaProducer;
 
     void WorkerThread(unsigned int index, DBConnect* dbConnect);
     void ProcessRequest(unsigned int index, ClientRequest* request, DBConnect* dbConnect);
+    void SendResponseAndLogToKafka(ClientRequest *request);
 };
 

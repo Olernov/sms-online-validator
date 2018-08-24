@@ -29,7 +29,7 @@ Server::Server() :
 {}
 
 
-bool Server::Initialize(const Config& config,  ConnectionPool* cp, std::string& errDescription)
+bool Server::Initialize(const Config& config,  /*ConnectionPool* cp, */std::string& errDescription)
 {
     udpSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (udpSocket < 0) {
@@ -43,8 +43,8 @@ bool Server::Initialize(const Config& config,  ConnectionPool* cp, std::string& 
         return false;
     }
     struct timeval tv;
-    tv.tv_sec = 0;
-    tv.tv_usec = 1; // time-out in milliseconds. "struct timeval" doc says it's microseconds but MSDN says it's milliseconds
+    tv.tv_sec = 3;
+    tv.tv_usec = 0; // time-out in milliseconds. "struct timeval" doc says it's microseconds but MSDN says it's milliseconds
                     // and actually it's milliseconds.
     if (setsockopt(udpSocket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) != 0) {
         errDescription = "setsockopt failed when setting SO_RCVTIMEO. Error #" + std::to_string(errno);
@@ -60,7 +60,6 @@ bool Server::Initialize(const Config& config,  ConnectionPool* cp, std::string& 
         errDescription = "Failed to call bind on server socket. Error #" + std::to_string(errno);
         return false;
 	}
-    connectionPool = cp;
     if (!config.kafkaBroker.empty()) {
         std::string errstr;
         if (kafkaGlobalConf->set("bootstrap.servers", config.kafkaBroker, errstr) != RdKafka::Conf::CONF_OK
@@ -83,6 +82,11 @@ bool Server::Initialize(const Config& config,  ConnectionPool* cp, std::string& 
         kafkaProducer = nullptr;
         logWriter << "Kafka broker is not set. SMS Validator will not log events to Kafka";
     }
+
+    connectionPool.reset(new ConnectionPool);
+    if (!connectionPool->Initialize(config, udpSocket, kafkaProducer.get(), errDescription)) {
+        return false;
+    }
         
     return true;
 }
@@ -97,10 +101,6 @@ Server::~Server()
 void Server::Run()
 {
 	while (!shutdownInProgress) {
-        logWriter.Write("Entering SendClientResponses... ", mainThreadIndex, debug);
-        SendClientResponses();
-        logWriter.Write("Returned from SendClientResponses.", mainThreadIndex, debug);
-
         char receiveBuffer[65000];
         sockaddr_in senderAddr;
 #ifndef _WIN32
@@ -108,13 +108,8 @@ void Server::Run()
 #else
 		int senderAddrSize = sizeof(senderAddr);
 #endif
-        logWriter.Write("Entering recvfrom... ", mainThreadIndex, debug);
-        auto start = std::chrono::system_clock::now();
         int recvBytes = recvfrom(udpSocket, receiveBuffer, sizeof(receiveBuffer), 0,
                                  reinterpret_cast<sockaddr*>(&senderAddr), &senderAddrSize);
-        auto finish = std::chrono::system_clock::now();
-        logWriter.Write("Returned from recvfrom. Elapsed time: " + std::to_string((finish - start).count()) + " ms.",
-                        mainThreadIndex, debug);
         if (recvBytes > 0) {
             logWriter.Write(std::to_string(recvBytes) + " bytes received from " + IPAddr2Text(senderAddr.sin_addr), 
 				mainThreadIndex, debug);
@@ -125,7 +120,6 @@ void Server::Run()
                     + std::to_string(errno) + "). ";
         }
     }
-    SendClientResponses();
     WaitForKafkaQueue();
 }
 
@@ -226,30 +220,6 @@ bool Server::SendNotAcceptedResponse(sockaddr_in& senderAddr, uint32_t requestNu
         return false;
     }
 	return true;
-}
-
-
-void Server::SendClientResponses()
-{
-    ClientRequest* request;
-    std::string errorDescr;
-    bool responseSendSuccess;
-    while((request = connectionPool->PopProcessedRequest()) != nullptr) {
-        if (request->SendResultToClient(udpSocket, errorDescr)) {
-            responseSendSuccess = true;
-            logWriter.Write("Response #" + std::to_string(request->requestNum)
-                            + " sent to client. ", mainThreadIndex, notice);
-        }
-        else {
-            responseSendSuccess = false;
-            logWriter.Write("SendRequestResultToClient error: " + errorDescr, mainThreadIndex, error);
-        }
-
-        if (kafkaProducer != nullptr) {
-            request->LogToKafka(responseSendSuccess);
-        }
-        delete request;
-    }
 }
 
 

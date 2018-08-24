@@ -8,8 +8,7 @@ extern LogWriterOtl logWriter;
 ConnectionPool::ConnectionPool() :
     initialized(false),
     stopFlag(false),
-    incomingRequests(queueSize),
-    processedRequests(queueSize)
+    incomingRequests(queueSize)
 {
 }
 
@@ -29,7 +28,8 @@ ConnectionPool::~ConnectionPool()
 }
 
 
-bool ConnectionPool::Initialize(const Config& config, std::string& errDescription)
+bool ConnectionPool::Initialize(const Config& config, int socket, RdKafka::Producer* kafkaProd,
+                                std::string& errDescription)
 {
     if (initialized) {
         errDescription = "Connection pool is already initialized";
@@ -52,6 +52,8 @@ bool ConnectionPool::Initialize(const Config& config, std::string& errDescriptio
     for (unsigned int i = 0; i < config.connectionCount; ++i) {
         workerThreads.push_back(std::thread(&ConnectionPool::WorkerThread, this, i, dbConnectPool[i]));
     }
+    udpSocket = socket;
+    kafkaProducer = kafkaProd;
     logWriter << "Connection pool initialized successfully";
     initialized = true;
     return true;
@@ -78,7 +80,6 @@ void ConnectionPool::WorkerThread(unsigned int index, DBConnect* dbConnect)
             double requestAgeSec = duration<double>(system_clock::now() - request->accepted).count();
             if (requestAgeSec < maxRequestAgeSec) {
                 ProcessRequest(index, request, dbConnect);
-                processedRequests.push(request);
             }
             else {
                 std::stringstream ss;
@@ -86,6 +87,7 @@ void ConnectionPool::WorkerThread(unsigned int index, DBConnect* dbConnect)
                    << round(requestAgeSec * 1000) << " ms)";
                 logWriter << ss.str();
             }
+            delete request;
         }
     }
 }
@@ -99,6 +101,7 @@ void ConnectionPool::ProcessRequest(unsigned int index, ClientRequest *request, 
         logWriter.Write(ss.str(), index, debug);
 
         request->Process(dbConnect);
+        SendResponseAndLogToKafka(request);
 
         ss.str(std::string());
         ss << "Request #" << request->requestNum << " processed by thread #" << index
@@ -106,6 +109,7 @@ void ConnectionPool::ProcessRequest(unsigned int index, ClientRequest *request, 
            << " ms. ";
         logWriter << ss.str();
         request->DumpResults();
+
     }
     catch(const otl_exception& ex) {
         request->resultDescr = "**** DB ERROR ****" + crlf + OTL_Utils::OtlExceptionToText(ex);
@@ -116,16 +120,30 @@ void ConnectionPool::ProcessRequest(unsigned int index, ClientRequest *request, 
     }
 }
 
-ClientRequest *ConnectionPool::PopProcessedRequest()
+
+void ConnectionPool::SendResponseAndLogToKafka(ClientRequest *request)
 {
-    ClientRequest* request;
-    if (processedRequests.pop(request)) {
-        return request;
+    std::string errorDescr;
+    bool responseSendSuccess;
+    {
+        std::lock_guard<std::mutex> lock(socketMutex);
+        responseSendSuccess = request->SendResultToClient(udpSocket, errorDescr);
+    }
+    if (responseSendSuccess) {
+        logWriter.Write("Response #" + std::to_string(request->requestNum)
+                        + " sent to client. ", mainThreadIndex, notice);
     }
     else {
-        return nullptr;
+        logWriter.Write("Send response #" + std::to_string(request->requestNum)
+                        + " error: " + errorDescr, mainThreadIndex, error);
+    }
+
+    if (kafkaProducer != nullptr) {
+        request->LogToKafka(responseSendSuccess);
     }
 }
+
+
 
 
 

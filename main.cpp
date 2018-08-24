@@ -36,10 +36,6 @@ int main(int argc, char* argv[])
         exit(EXIT_FAILURE);
     }
     const char* confFilename = argv[1];
-    bool runTests = false;
-    if (argc > 2 && !strncasecmp(argv[2], "-test", 5)) {
-        runTests = true;
-    }
     std::ifstream confFile(confFilename, std::ifstream::in);
     if (!confFile.is_open()) {
         std::cerr << "Unable to open config file " << confFilename << std::endl;
@@ -77,14 +73,8 @@ int main(int argc, char* argv[])
         logWriter << "SMS online validator start. Configuration settings:";
         logWriter << config.DumpAllSettings();
 
-        ConnectionPool connectionPool;
         std::string errDescription;
-        if (!connectionPool.Initialize(config, errDescription)) {
-            std::cerr << "Unable to initialize connection pool: " << errDescription << ". Exiting." << std::endl;
-            exit(EXIT_FAILURE);
-        }
-
-        if (!server.Initialize(config, &connectionPool, errDescription)) {
+        if (!server.Initialize(config, /*&connectionPool,*/ errDescription)) {
             std::cerr << "Unable to initialize server: " << errDescription << ". Exiting." << std::endl;
             exit(EXIT_FAILURE);
         }
@@ -99,12 +89,7 @@ int main(int argc, char* argv[])
 	#endif
 		
         std::cout << "SMS online validator started. See log files at LOG_DIR for further details" << std::endl;
-        if (runTests) {
-            //RunKeyboardTests(connectionPool);
-        }
-        else {
-            server.Run();
-        }
+        server.Run();
     }
     catch (const std::exception& ex) {
         std::cerr << ex.what() <<  ". Exiting." <<std::endl;

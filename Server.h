@@ -25,7 +25,7 @@ class Server
 {
 public:
     Server();
-    bool Initialize(const Config &config, ConnectionPool *cp, std::string &errDescription);
+    bool Initialize(const Config &config, std::string &errDescription);
 	~Server();
 	void Run();
     void Stop();
@@ -36,7 +36,7 @@ private:
 
     int udpSocket;
     bool shutdownInProgress;
-    ConnectionPool* connectionPool;
+    std::unique_ptr<ConnectionPool> connectionPool;
     std::string kafkaTopicSms;
     std::string kafkaTopicCalls;
     std::unique_ptr<RdKafka::Conf> kafkaGlobalConf;
@@ -48,7 +48,6 @@ private:
     int ProcessNextRequestFromBuffer(const char* buffer, int maxLen, sockaddr_in& senderAddr);
     bool SendNotAcceptedResponse(sockaddr_in &senderAddr, uint32_t requestNum, std::string errDescr);
     bool SendIAmAliveResponse(sockaddr_in& senderAddr, uint32_t requestNum, std::string errDescr);
-    void SendClientResponses();
     std::string IPAddr2Text(const in_addr& pinAddr);
     void WaitForKafkaQueue();
 };
